@@ -41,6 +41,15 @@ class GymProfile(UUIDTimeStampedModel, AuditFieldMixin):
     def __str__(self):
         return self.name
 
+
+class GymBranding(GymProfile):
+    """Owner-editable subset of gym identity, with technical fields hidden in its admin."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Gym branding"
+        verbose_name_plural = "Gym branding"
+
 class GymSettings(UUIDTimeStampedModel, AuditFieldMixin):
     class CrossBranchAccess(models.TextChoices):
         PACKAGE_BASED = "PACKAGE_BASED", "Package based"

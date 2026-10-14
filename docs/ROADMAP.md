@@ -7,6 +7,10 @@ restricted role assignment, explicit branch membership and scope enforcement, an
 cross-branch access. Existing superuser-only identity/settings administration remains the baseline
 until those reviewed workflows exist.
 
+Phase 02 now implements Django Group business roles, restricted staff and branding workflows,
+branch/assignment models, a scoped selector, audit events and a redesigned empty-state dashboard.
+The technical User/Group admin stays superuser-only. Future modules remain planning items.
+
 The intended fourteen business module names are: members, memberships, packages, attendance,
 billing, staff, scheduling, finance, inventory, branches, reports, notifications, security_audit,
 and dashboard. These are planning names only, not installed apps or implementation commitments.

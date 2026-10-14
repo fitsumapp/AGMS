@@ -1,0 +1,7 @@
+{% if card.permission %}<article class="erp-kpi-card">
+  <div class="erp-kpi-top"><span class="erp-kpi-icon material-symbols-outlined" aria-hidden="true">{{ card.icon }}</span><span class="erp-kpi-stage">Coming soon</span></div>
+  <h3>{{ card.title }}</h3>
+  <p class="erp-kpi-value">{% if card.value is not None %}{{ card.value }}{% else %}—{% endif %}</p>
+  <p class="erp-kpi-detail">{{ card.status }}</p>
+  {% if card.change is not None %}<span class="erp-kpi-change">{{ card.change }}</span>{% endif %}
+</article>{% endif %}

@@ -40,3 +40,8 @@ There is no MFA, public signup, password-reset email delivery, external SMS, bus
 or production penetration test in Phase 01. Validate TLS, backups and restore, network controls,
 dependency updates and server patching before deployment. Never serve this project with runserver
 in production. An in-process database outage indicator is not an external uptime monitor.
+
+Phase 02 adds a restricted owner staff workflow, PostgreSQL assignment constraints, service-side
+branch scope checks, CSRF-protected selector and a basic operational AuditEvent. No business role
+is a technical superuser. Audit entries are append-only through the admin. Details and current
+limitations are in [roles and branch scope](ROLES_AND_BRANCHES.md).

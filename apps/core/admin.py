@@ -2,7 +2,9 @@ import logging
 from django.conf import settings
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import GymProfile, GymSettings
+from .models import GymProfile, GymSettings, GymBranding
+from apps.accounts.roles import is_owner
+from apps.branches.audit import record_event
 
 logger = logging.getLogger("gym.admin")
 
@@ -41,3 +43,29 @@ class GymSettingsAdmin(FoundationAdmin):
     list_display = ("profile", "allow_access_with_balance", "membership_freeze_enabled")
     def has_add_permission(self, request):
         return super().has_add_permission(request) and GymProfile.objects.exists() and not GymSettings.objects.exists()
+
+
+@admin.register(GymBranding)
+class GymBrandingAdmin(ModelAdmin):
+    list_display = ("name", "phone", "email", "updated_at")
+    fields = ("name", "legal_name", "phone", "email", "address", "logo")
+
+    def has_module_permission(self, request):
+        return is_owner(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return is_owner(request.user)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return is_owner(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+        record_event(request.user, "gym_branding_updated", obj)

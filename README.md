@@ -1,6 +1,9 @@
-# Gym Management ERP — Phase 01
+# Gym Management ERP — Foundation and Branches
 
 A Django Unfold administration foundation for independently deployed Ethiopian gyms.
+Phase 02 adds business roles, branch scoping, restricted staff administration and a professional
+dashboard. Read [roles and branch scope](docs/ROLES_AND_BRANCHES.md) and
+[dashboard design](docs/DASHBOARD_DESIGN.md) before extending branch-owned data.
 Each customer owns a separate deployment, domain, PostgreSQL database, secrets and backup storage.
 There are no tenants, shared customer databases or SaaS billing. Branch support belongs to Phase 02.
 
@@ -15,6 +18,7 @@ python -m venv .venv
 Copy-Item .env.example .env # Only when .env does not already exist
 # Edit .env: supply a random secret and credentials for your own PostgreSQL database.
 .\.venv\Scripts\python manage.py migrate
+.\.venv\Scripts\python manage.py seed_business_roles
 .\.venv\Scripts\python manage.py createsuperuser
 .\.venv\Scripts\python manage.py runserver
 ```
@@ -22,6 +26,9 @@ Copy-Item .env.example .env # Only when .env does not already exist
 Open http://127.0.0.1:8000/admin/. Create one Gym Profile under System Settings and
 one policy record under Access Policies. The dashboard works before either exists.
 Only superusers may administer identities or settings in Phase 01.
+After seeding roles, a technical superuser can assign the first Gym Owner Group in the User
+admin. That owner can then manage permitted staff accounts, branch assignments and gym branding
+through separate business screens. Technical User/Group and system policy screens stay restricted.
 
 For this workspace, an ignored `.env` and isolated local database may already exist;
 do not overwrite them. The local helper supports `start` and `stop`.

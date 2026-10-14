@@ -1,7 +1,12 @@
 # Architecture
 
-One reusable codebase, one installation per gym customer. Multiple branches will live inside
-that installation in a later phase. There is no tenant layer or customer routing middleware.
+One reusable codebase, one installation per gym customer. Multiple branches live inside that
+installation. There is no tenant layer or customer routing middleware.
+
+Phase 02 adds `apps.branches` and owner-safe proxy administration while keeping a separate
+deployment/database per gym. See [roles and branch scope](ROLES_AND_BRANCHES.md) and
+[dashboard design](DASHBOARD_DESIGN.md) for the current architecture. The Phase 01 description
+below is retained as the foundation record; `PHASE_02_REPORT.md` contains implementation evidence.
 
 | Directory | Responsibility |
 |---|---|
@@ -9,6 +14,7 @@ that installation in a later phase. There is no tenant layer or customer routing
 | config/branding.py | Validated environment palette and functional Unfold navigation |
 | apps/accounts | Email/UUID user, manager, styled forms, restricted admin, auth logging |
 | apps/core | UUID/timestamp and audit abstractions, gym profile and policies, dashboard |
+| apps/branches | Branches, assignments, scoped services, operating hours and operational audit |
 | templates/admin | Django-only Unfold dashboard and reusable status component |
 | static / media | Local assets / private files; neither contains business module placeholders |
 | tests | PostgreSQL-backed authentication, authorization, settings and security tests |

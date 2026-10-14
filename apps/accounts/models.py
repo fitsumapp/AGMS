@@ -54,3 +54,12 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDTimeStampedModel):
         return self.first_name or self.email
     def __str__(self):
         return self.email
+
+
+class StaffAccount(User):
+    """Restricted business workflow; technical User admin remains superuser-only."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Staff account"
+        verbose_name_plural = "Staff accounts"

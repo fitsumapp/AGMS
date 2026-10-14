@@ -13,7 +13,7 @@ def test_empty_dashboard(client, root, settings):
     response = client.get(reverse("admin:index"))
     assert response.status_code == 200
     html = response.content.decode()
-    for expected in ["Addis Fitness", "Africa/Addis_Ababa", "Database connected", "Available in a future phase", "0.1.0"]:
+    for expected in ["Addis Fitness", "Africa/Addis_Ababa", "Database connected", "Available in a future phase", settings.APP_VERSION]:
         assert expected in html
     assert "Monthly revenue" not in html and "Active members" not in html
 

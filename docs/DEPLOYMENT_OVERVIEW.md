@@ -11,6 +11,8 @@ customer credentials or data. Select `config.settings.production` for WSGI/ASGI.
    service behind TLS termination. No production server or platform is assumed by this repository.
 4. Back up the existing customer database before applying upgrades. Run checks, migrations and
    `manage.py collectstatic --noinput`. Serve STATIC_ROOT as public static assets, never MEDIA_ROOT.
+   After Phase 02 migrations, run `manage.py seed_business_roles` to install the six scoped
+   business Groups. The command is idempotent and grants no technical User/Group admin rights.
 5. Create the first superuser interactively, then create the gym profile and policy record.
 6. Validate HTTPS and redirect handling. Only trust forwarded protocol when the proxy sanitizes it.
 7. Enable HSTS after HTTPS validation; includeSubDomains/preload require control of affected domains.

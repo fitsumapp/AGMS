@@ -13,7 +13,8 @@ INSTALLED_APPS = [
     "unfold", "django.contrib.admin", "django.contrib.auth",
     "django.contrib.contenttypes", "django.contrib.sessions",
     "django.contrib.messages", "django.contrib.staticfiles",
-    "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig", "axes",
+    "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig",
+    "apps.branches.apps.BranchesConfig", "axes",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -74,7 +75,7 @@ AXES_RESET_ON_SUCCESS = False
 AXES_SENSITIVE_PARAMETERS = ["username", "ip_address", "user_agent", "path", "http_accept"]
 AXES_ENABLE_ACCESS_FAILURE_LOG = False
 AXES_ENABLE_ACCESS_SUCCESS_LOG = False
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 ADMIN_PAGE_SIZE = 25
 GYM_DISPLAY_NAME = os.getenv("GYM_DISPLAY_NAME", "Gym ERP")
 GYM_DEFAULT_CURRENCY = os.getenv("GYM_DEFAULT_CURRENCY", "ETB")

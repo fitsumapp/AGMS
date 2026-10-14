@@ -4,8 +4,11 @@ from django.contrib.auth.models import Group
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm
 from apps.core.admin import SuperuserOnlyMixin
-from .forms import AccountChangeForm, AccountCreationForm
-from .models import User
+from .forms import AccountChangeForm, AccountCreationForm, StaffCreationForm, StaffChangeForm, ASSIGNABLE_ROLES
+from .models import User, StaffAccount
+from .roles import is_owner
+from apps.branches.audit import record_event
+from django.core.exceptions import PermissionDenied
 
 @admin.register(User)
 class UserAdmin(SuperuserOnlyMixin, BaseUserAdmin, ModelAdmin):
@@ -28,3 +31,55 @@ admin.site.unregister(Group)
 @admin.register(Group)
 class GroupAdmin(SuperuserOnlyMixin, BaseGroupAdmin, ModelAdmin):
     pass
+
+
+@admin.register(StaffAccount)
+class StaffAccountAdmin(ModelAdmin):
+    form = StaffChangeForm
+    add_form = StaffCreationForm
+    list_display = ("email", "first_name", "last_name", "is_active", "is_staff")
+    search_fields = ("email", "first_name", "last_name")
+    list_filter = ("is_active",)
+    ordering = ("email",)
+    fieldsets = (("Identity", {"fields": ("email", "first_name", "last_name", "phone", "is_active", "role")}),)
+    add_fieldsets = (("New staff account", {"fields": ("email", "first_name", "last_name", "phone", "password1", "password2", "role")}),)
+    change_form_template = "admin/change_form.html"
+
+    def get_fieldsets(self, request, obj=None):
+        return self.add_fieldsets if obj is None else self.fieldsets
+
+    def get_form(self, request, obj=None, **kwargs):
+        kwargs["form"] = StaffCreationForm if obj is None else StaffChangeForm
+        return super().get_form(request, obj, **kwargs)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset.filter(is_superuser=False)
+        return queryset.filter(is_superuser=False).exclude(groups__name="Gym Owner").exclude(pk=request.user.pk)
+
+    def has_module_permission(self, request):
+        return is_owner(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return is_owner(request.user) and (obj is None or self.get_queryset(request).filter(pk=obj.pk).exists())
+
+    def has_add_permission(self, request):
+        return is_owner(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return self.has_view_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        role = form.cleaned_data["role"]
+        if (not is_owner(request.user) or role.name not in ASSIGNABLE_ROLES or
+            (change and not self.has_change_permission(request, obj))):
+            raise PermissionDenied
+        obj.is_staff = True
+        obj.is_superuser = False
+        super().save_model(request, obj, form, change)
+        obj.groups.set([role])
+        record_event(request.user, "business_role_assigned", obj, {"role": role.name})
