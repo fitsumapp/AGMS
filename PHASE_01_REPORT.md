@@ -65,7 +65,7 @@ empty asset-directory markers are included in the final file count.
 | apps | `__init__.py`: app namespace |
 | templates | `admin/index.html`: dashboard; `admin/login.html`: branded login extension; `admin/components/status_card.html`: reusable status card; `500.html`: generic error page |
 | requirements | `base.txt`: compatible dependency ranges; `development.txt`: test dependencies; `lock.txt`: exact validated environment |
-| scripts | `local_postgres.py`: isolated development cluster initialization/start/stop; `check_deployment.py`: deploy checks with ephemeral sample configuration; `verify_admin.py`: HTTP-rendered HTML evidence with rolled-back verification user |
+| scripts | `local_postgres.py`: isolated development cluster initialization/start/stop; `check_deployment.py`: deploy checks with ephemeral sample configuration; `verify_admin.py`: HTTP-rendered HTML evidence with rolled-back verification user; `verify_live_admin.py`: real HTTP login/dashboard verification with temporary random credential and cleanup |
 | tests | `conftest.py`: deterministic fixtures; `test_accounts.py`: identity/authentication/throttling; `test_authorization.py`: role/model access; `test_admin_workflows.py`: mutation, forms, password validation, private logo, headers; `test_settings_models.py`: defaults/constraints/actors; `test_dashboard.py`: empty dashboard/branding/outage handling; `test_security.py`: CSRF/environment/production/utilities; `test_configuration.py`: all-Unfold registry and fail-closed startup |
 | docs | `ARCHITECTURE.md`, `DEVELOPMENT_SETUP.md`, `SECURITY.md`, `DEPLOYMENT_OVERVIEW.md`, `ROADMAP.md`: design, Windows setup, controls, rollout and future module boundaries |
 | static / media | `.gitkeep`: retain empty asset directories |
@@ -198,12 +198,13 @@ No application protection was removed. Final results below supersede intermediat
 
 - Repository initialized for this previously empty workspace; branch: `master`.
 - Author identity reused from existing Git configuration; no global Git settings changed.
-- Final commit: the commit containing this report. The exact hash is reported in the delivery message and is
+- Final verification commit: the commit containing this report update. The exact hash is reported in the delivery message and is
   discoverable with `git log -1 --format=%H`; a commit cannot embed its own hash in its contents.
 - Only Phase 01 source/docs/tests/configuration are included. `.env`, virtualenv, clusters,
   collected assets and verification artifacts are ignored.
-- Working tree at report generation contains only the 61 new Phase 01 files. Post-commit status
-  is verified in the delivery message; no pre-existing changes existed.
+- Initial implementation commit: `1fc42b42b19d82499b74bdd575861ee7d2929f0f`.
+- Final verification adds one script and modifies this report. Post-commit status is verified
+  in the delivery message; no pre-existing changes existed.
 
 ## 14. Known Limitations
 
@@ -228,8 +229,8 @@ trusted-proxy validation, backup/restore and monitoring. Phase 02 has not been s
 
 | Measure | Final result |
 |---|---|
-| Deliverable files created | 61 |
-| Pre-existing files modified | 0 |
+| Deliverable files created | 62 (61 initial, 1 final-verification script) |
+| Pre-existing files modified | 0 before Phase 01; this report updated for final verification |
 | Final suite tests executed / passed / failed / skipped | 63 / 63 / 0 / 0 (also 0 errors) |
 | Database migration status | Applied, 30/30, isolated PostgreSQL 18.3 |
 | Security configuration check | PASS with explicit sample production values and HSTS enabled |
@@ -239,3 +240,28 @@ trusted-proxy validation, backup/restore and monitoring. Phase 02 has not been s
 Counts refer to the final suite, not repeated/intermediate executions. Source-file totals exclude
 ignored environments, database storage, caches, artifacts and Git internals. Assumptions and
 unverified infrastructure properties are explicitly distinguished from executed checks above.
+
+## 17. Final Verification — October 14, 2026
+
+This section records the separate final verification requested after the initial implementation
+commit. It supersedes earlier statements only where new evidence is listed.
+
+| Verification | Actual result |
+|---|---|
+| Development PostgreSQL connection | PASS — `PostgreSQL 18.3 on x86_64-windows`; connected to the configured `gym_erp` database on 127.0.0.1:55432 |
+| Applied migrations | PASS — 30 rows in `django_migrations`, and `showmigrations --plan` showed all 30 as applied |
+| Migration drift | PASS — `No changes detected` |
+| Django system check | PASS — `System check identified no issues (0 silenced)` |
+| Running development server | PASS — Django started at 127.0.0.1:8000 using the existing development settings and PostgreSQL database |
+| Anonymous `/admin/` | PASS — redirected to `/admin/login/?next=/admin/`, then HTTP 200; branded login and CSRF field present; no-store and DENY headers present |
+| Authenticated `/admin/` | PASS — real HTTP login and dashboard returned 200; gym branding, `Database connected` and `Available in a future phase` rendered |
+| `createsuperuser` management command | PASS — invoked with a random in-memory password inside a rolled-back transaction; no account persisted |
+| Temporary live HTTP account | PASS — random account created only for the request and removed immediately afterward; database has zero persistent users |
+| Browser visual/layout/theme/navigation testing | NOT VERIFIED — Browser runtime returned `No browser is available`; browser list was empty; no screenshots captured |
+| Full pytest rerun | PASS — 63 passed in 104.43 seconds; 0 failed, 0 skipped, 0 errors; `artifacts/pytest-final-verification.xml` |
+| Git safety | PASS — before final changes, working tree clean; `git ls-files` found no `.env`, `.local`, `.venv`, `artifacts` or `staticfiles` entries |
+
+The browser gap keeps Phase 01 **PARTIAL**. HTTP and template checks establish that the pages
+render and the authentication flow works, but do not establish visual quality on desktop/mobile
+or in light/dark themes. The local development server was started for this verification and is
+not a production service. No Phase 02 work or database reset was performed.
