@@ -1,0 +1,27 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<style>
+ .gym-hero{background:{{ brand.primary }};color:white;border-radius:16px;padding:32px;margin-bottom:24px}
+ .gym-eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8}
+ .gym-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0}
+ .gym-card{border:1px solid var(--color-base-200);border-radius:12px;padding:24px;background:{{ brand.background }};color:{{ brand.text }}}
+ .dark .gym-card{background:var(--color-base-900);border-color:var(--color-base-700);color:var(--color-base-100)}
+ .gym-card h2{font-size:20px;font-weight:600;margin:8px 0}.gym-muted{font-size:14px;opacity:.75}
+ .gym-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}.gym-actions a{padding:10px 16px;border:1px solid var(--color-base-300);border-radius:8px}
+ .gym-status{display:inline-block;border-radius:20px;background:{{ brand.secondary }};color:white;padding:4px 12px;font-size:12px}
+</style>
+<section class="gym-hero">
+ <div class="gym-eyebrow">Your management workspace</div>
+ <h1 style="font-size:30px;font-weight:600;margin:12px 0">Welcome to {{ gym_name }}</h1>
+ <p>{{ current_date|date:"l, j F Y" }} &middot; {{ gym_timezone }}</p>
+</section>
+<div class="flex items-center justify-between"><h2 class="text-xl font-semibold">System overview</h2>
+ <span class="gym-status">{% if database_online %}Database connected{% else %}Database unavailable{% endif %}</span>
+</div>
+<section class="gym-grid">{% for label, value, detail in foundation_cards %}{% include "admin/components/status_card.html" %}{% endfor %}</section>
+{% if request.user.is_superuser %}
+<section class="gym-card"><div class="gym-eyebrow">Administration</div><h2>Set up your gym</h2><p class="gym-muted">Manage access, update your gym profile, and review foundation policies.</p>
+ <nav class="gym-actions" aria-label="Quick links"><a href="{% url 'admin:accounts_user_changelist' %}">Users</a><a href="{% url 'admin:auth_group_changelist' %}">Groups</a><a href="{% url 'admin:core_gymprofile_changelist' %}">System Settings</a><a href="{% url 'admin:core_gymsettings_changelist' %}">Access Policies</a></nav>
+</section>{% endif %}
+<section class="gym-card" style="margin-top:24px"><div class="gym-eyebrow">Business insights</div><h2>Room to grow</h2><p class="gym-muted">Member activity, attendance, revenue, and branch performance: Available in a future phase.</p></section>
+{% endblock %}
