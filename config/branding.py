@@ -32,6 +32,16 @@ def can_see_branch_settings(request):
     from apps.accounts.roles import has_role
     return owner(request) or has_role(request.user, "Branch Manager")
 
+def can_see_members(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    if has_role(request.user, "Trainer") or has_role(request.user, "POS Staff"):
+        return False
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist") or has_role(request.user, "Accountant")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -55,6 +65,7 @@ def unfold_config():
             {"title": "Overview", "items": [
                 {"title": "Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index")}]},
             {"title": "Gym Operations", "items": [
+                {"title": "Members", "icon": "group", "link": reverse_lazy("admin:members_member_changelist"), "permission": can_see_members},
                 {"title": "Branches", "icon": "location_city", "link": reverse_lazy("admin:branches_branch_changelist"), "permission": can_see_branches},
                 {"title": "Operating Hours", "icon": "schedule", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings}]},
             {"title": "Management", "items": [

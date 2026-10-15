@@ -9,10 +9,38 @@ ROLE_PERMISSIONS = {
             "change_branchsettings", "add_userbranchaccess", "change_userbranchaccess", "view_userbranchaccess"},
         "accounts": {"add_staffaccount", "change_staffaccount", "view_staffaccount"},
         "core": {"view_gymbranding", "change_gymbranding"},
+        "members": {
+            "add_member", "change_member", "view_member", "delete_member",
+            "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact", "delete_memberemergencycontact",
+            "add_memberdocument", "change_memberdocument", "view_memberdocument", "delete_memberdocument",
+            "add_membernote", "change_membernote", "view_membernote", "delete_membernote",
+            "view_memberstatushistory",
+        },
     },
-    "Branch Manager": {"branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"}},
-    "Receptionist": {"branches": {"view_branch"}},
-    "Accountant": {"branches": {"view_branch"}},
+    "Branch Manager": {
+        "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
+        "members": {
+            "add_member", "change_member", "view_member",
+            "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact", "delete_memberemergencycontact",
+            "add_memberdocument", "change_memberdocument", "view_memberdocument", "delete_memberdocument",
+            "add_membernote", "change_membernote", "view_membernote",
+            "view_memberstatushistory",
+        },
+    },
+    "Receptionist": {
+        "branches": {"view_branch"},
+        "members": {
+            "add_member", "change_member", "view_member",
+            "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact",
+            "add_memberdocument", "view_memberdocument",
+            "add_membernote", "view_membernote",
+            "view_memberstatushistory",
+        },
+    },
+    "Accountant": {
+        "branches": {"view_branch"},
+        "members": {"view_member"},
+    },
     "Trainer": {"branches": {"view_branch"}},
     "POS Staff": {"branches": {"view_branch"}},
 }

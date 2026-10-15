@@ -1,0 +1,57 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Member Status Management</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Change Status: {{ member.member_number }} · {{ member.full_name }}
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Current Status: <strong class="text-font-default-light dark:text-font-default-dark">{{ member.get_status_display }}</strong>
+      </p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="p-3 bg-red-100 border border-red-200 text-red-800 rounded-lg text-sm">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div>
+        <label for="id_new_status" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.new_status.label }}
+        </label>
+        {{ form.new_status }}
+        {% if form.new_status.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.new_status.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_reason" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.reason.label }}
+        </label>
+        {{ form.reason }}
+        {% if form.reason.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.reason.errors.0 }}</p>
+        {% endif %}
+        <p class="text-xs text-subtle mt-1">{{ form.reason.help_text }}</p>
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:members_member_change' member.pk %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <button type="submit" class="px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition">
+          Update Member Status
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -10,7 +10,8 @@ def test_all_admins_use_unfold():
     assert {model._meta.label for model in admin.site._registry} == {
         "accounts.User", "accounts.StaffAccount", "auth.Group", "core.GymProfile",
         "core.GymSettings", "core.GymBranding", "branches.Branch",
-        "branches.UserBranchAccess", "branches.BranchSettings", "branches.AuditEvent"}
+        "branches.UserBranchAccess", "branches.BranchSettings", "branches.AuditEvent",
+        "members.Member"}
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 
 @pytest.mark.parametrize("missing", ["DJANGO_SECRET_KEY", "POSTGRES_PASSWORD"])

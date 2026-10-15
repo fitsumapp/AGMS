@@ -52,10 +52,25 @@ def dashboard(request, context):
     profile = profile_for_request(request)
     zone = profile.default_timezone if profile else settings.GYM_DEFAULT_TIMEZONE
     branches = context.get("branch_options", [])
+    selected_b = context.get("selected_branch")
+
+    try:
+        from apps.members.selectors import get_member_metrics
+        metrics = get_member_metrics(request.user, active_branch=selected_b)
+        active_profiles_val = metrics["active_profiles"]
+        total_val = metrics["total_members"]
+        new_month_val = metrics["new_this_month"]
+        member_status_label = f"{total_val} total registered"
+        member_change_label = f"+{new_month_val} this month" if new_month_val else "No new this month"
+    except Exception:
+        active_profiles_val = 0
+        member_status_label = "0 total registered"
+        member_change_label = None
+
     context.update(gym_name=site_name(request), gym_timezone=zone, current_date=local_date(zone),
         application_version=settings.APP_VERSION, database_online=database_available(), brand=PALETTE,
         kpi_cards=[
-            {"title": "Active Members", "icon": "groups", "value": None, "status": "Awaiting membership module", "change": None, "permission": True},
+            {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
             {"title": "Today's Check-ins", "icon": "how_to_reg", "value": None, "status": "Awaiting attendance module", "change": None, "permission": True},
             {"title": "Monthly Revenue", "icon": "payments", "value": None, "status": "Awaiting billing module", "change": None, "permission": True},
             {"title": "Expired Memberships", "icon": "event_busy", "value": None, "status": "Awaiting membership module", "change": None, "permission": True},
