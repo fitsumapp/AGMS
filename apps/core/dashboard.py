@@ -67,20 +67,39 @@ def dashboard(request, context):
         member_status_label = "0 total registered"
         member_change_label = None
 
+    try:
+        from apps.memberships.selectors import get_membership_metrics
+        m_metrics = get_membership_metrics(request.user, active_branch=selected_b)
+    except Exception:
+        m_metrics = {
+            "active_memberships": 0,
+            "pending_memberships": 0,
+            "frozen_memberships": 0,
+            "expired_memberships": 0,
+            "expiring_7_days": 0,
+            "memberships_by_package": [],
+            "memberships_by_branch": [],
+        }
+
+    kpi_cards = [
+        {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
+        {"title": "Today's Check-ins", "icon": "how_to_reg", "value": None, "status": "Awaiting attendance module", "change": None, "permission": True},
+        {"title": "Monthly Revenue", "icon": "payments", "value": None, "status": "Awaiting billing module", "change": None, "permission": True},
+        {"title": "Active Memberships", "icon": "card_membership", "value": m_metrics["active_memberships"], "status": f"{m_metrics['pending_memberships']} pending clearance", "change": f"{m_metrics['expiring_7_days']} expiring in 7d", "permission": True},
+        {"title": "Expired Memberships", "icon": "event_busy", "value": m_metrics["expired_memberships"], "status": f"{m_metrics['frozen_memberships']} frozen", "change": None, "permission": True},
+    ]
+
+    analytics_sections = [
+        ("Revenue Overview", "Revenue series will appear when billing is active."),
+        ("Today's Attendance", "Check-ins will appear when attendance is active."),
+        ("Upcoming Classes", "Class schedules will appear in a future phase."),
+        ("Membership Expiry Alerts", f"{m_metrics['expiring_7_days']} subscriptions expiring within 7 days." if m_metrics['expiring_7_days'] else "No subscriptions expiring within 7 days."),
+    ]
+
     context.update(gym_name=site_name(request), gym_timezone=zone, current_date=local_date(zone),
         application_version=settings.APP_VERSION, database_online=database_available(), brand=PALETTE,
-        kpi_cards=[
-            {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
-            {"title": "Today's Check-ins", "icon": "how_to_reg", "value": None, "status": "Awaiting attendance module", "change": None, "permission": True},
-            {"title": "Monthly Revenue", "icon": "payments", "value": None, "status": "Awaiting billing module", "change": None, "permission": True},
-            {"title": "Expired Memberships", "icon": "event_busy", "value": None, "status": "Awaiting membership module", "change": None, "permission": True},
-        ],
-        analytics_sections=[
-            ("Membership Overview", "Membership records will appear when the membership module is active."),
-            ("Revenue Overview", "Revenue series will appear when billing is active."),
-            ("Today's Attendance", "Check-ins will appear when attendance is active."),
-            ("Upcoming Classes", "Class schedules will appear in a future phase."),
-            ("Membership Expiry Alerts", "Expiry alerts will appear when memberships are active."),
-        ],
+        membership_metrics=m_metrics,
+        kpi_cards=kpi_cards,
+        analytics_sections=analytics_sections,
         branch_rows=branches[:5], branch_count=len(branches))
     return context

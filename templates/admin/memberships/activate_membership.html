@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Membership Activation</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Activate: {{ membership.membership_number }}
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Member: <strong class="text-font-default-light dark:text-font-default-dark">{{ membership.member.member_number }} · {{ membership.member.full_name }}</strong>
+      </p>
+      <p class="text-sm text-subtle">
+        Package: <strong>{{ membership.package.name }}</strong> ({{ membership.price_snapshot }} ETB)
+      </p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-900 dark:text-amber-200">
+        <p class="font-semibold mb-1">Billing Clearance Verification</p>
+        <p>This action confirms that payment clearance requirements are satisfied or authorized for this membership.</p>
+      </div>
+
+      <div>
+        <label for="id_payment_reference" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Payment / Receipt Reference
+        </label>
+        <input type="text" name="payment_reference" id="id_payment_reference" class="w-full px-3 py-2 border rounded-lg dark:bg-base-950 dark:border-base-700" placeholder="e.g. REC-2026-00129">
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:memberships_membership_change' membership.pk %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <button type="submit" class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition">
+          Confirm Activation
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

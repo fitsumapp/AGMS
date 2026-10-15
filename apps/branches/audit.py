@@ -5,6 +5,9 @@ ALLOWED_AUDIT_KEYS = {
     "field", "role", "branch_code", "reason",
     "member_number", "status", "old_branch_code", "new_branch_code",
     "document_type", "note_category", "detail",
+    "membership_number", "package_code", "payment_clearance",
+    "freeze_days", "start_date", "end_date", "new_end_date",
+    "rejection_reason", "idempotency_key",
 }
 
 

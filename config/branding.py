@@ -42,6 +42,16 @@ def can_see_members(request):
         return False
     return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist") or has_role(request.user, "Accountant")
 
+def can_see_memberships(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    if has_role(request.user, "Trainer") or has_role(request.user, "POS Staff"):
+        return False
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist") or has_role(request.user, "Accountant")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -51,6 +61,9 @@ def primary_shades():
     return shades
 
 def unfold_config():
+    from django.utils.text import format_lazy
+    membership_changelist = reverse_lazy("admin:memberships_membership_changelist")
+
     return {
         "SITE_TITLE": "apps.core.dashboard.site_name",
         "SITE_HEADER": "apps.core.dashboard.site_name",
@@ -68,6 +81,16 @@ def unfold_config():
                 {"title": "Members", "icon": "group", "link": reverse_lazy("admin:members_member_changelist"), "permission": can_see_members},
                 {"title": "Branches", "icon": "location_city", "link": reverse_lazy("admin:branches_branch_changelist"), "permission": can_see_branches},
                 {"title": "Operating Hours", "icon": "schedule", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings}]},
+            {"title": "Membership Management", "items": [
+                {"title": "Membership Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index"), "permission": can_see_memberships},
+                {"title": "Membership Packages", "icon": "card_membership", "link": reverse_lazy("admin:memberships_membershippackage_changelist"), "permission": can_see_memberships},
+                {"title": "Active Memberships", "icon": "how_to_reg", "link": format_lazy("{}?status__exact=ACTIVE", membership_changelist), "permission": can_see_memberships},
+                {"title": "Pending Memberships", "icon": "pending_actions", "link": format_lazy("{}?status__exact=PENDING", membership_changelist), "permission": can_see_memberships},
+                {"title": "Renewals", "icon": "autorenew", "link": reverse_lazy("admin:memberships_membershiprenewal_changelist"), "permission": can_see_memberships},
+                {"title": "Freeze Requests", "icon": "ac_unit", "link": reverse_lazy("admin:memberships_membershipfreeze_changelist"), "permission": can_see_memberships},
+                {"title": "Expiring Soon", "icon": "alarm", "link": format_lazy("{}?quick_filter=expiring_7_days", membership_changelist), "permission": can_see_memberships},
+                {"title": "Membership History", "icon": "history", "link": reverse_lazy("admin:memberships_membershipevent_changelist"), "permission": can_see_memberships},
+            ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},
                 {"title": "Branch Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:branches_userbranchaccess_changelist"), "permission": owner},

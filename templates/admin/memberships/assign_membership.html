@@ -1,0 +1,94 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Membership Enrollment</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Assign Membership Package
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Enroll an active member into a branch-authorized package. Standard paid packages start as Pending Billing.
+      </p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="p-3 bg-red-100 border border-red-200 text-red-800 rounded-lg text-sm">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div>
+        <label for="id_member" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.member.label }}
+        </label>
+        {{ form.member }}
+        {% if form.member.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.member.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_home_branch" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.home_branch.label }}
+        </label>
+        {{ form.home_branch }}
+        {% if form.home_branch.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.home_branch.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_package" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.package.label }}
+        </label>
+        {{ form.package }}
+        {% if form.package.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.package.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_start_date" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.start_date.label }}
+        </label>
+        {{ form.start_date }}
+        {% if form.start_date.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.start_date.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      {% if form.is_complimentary and not form.is_complimentary.is_hidden %}
+      <div class="p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-3">
+        <label class="flex items-center space-x-2 text-sm font-semibold text-purple-900 dark:text-purple-300">
+          {{ form.is_complimentary }}
+          <span>{{ form.is_complimentary.label }}</span>
+        </label>
+        <div>
+          <label for="id_complimentary_reason" class="block text-xs font-semibold mb-1 text-purple-800 dark:text-purple-300">
+            {{ form.complimentary_reason.label }}
+          </label>
+          {{ form.complimentary_reason }}
+          {% if form.complimentary_reason.errors %}
+            <p class="text-xs text-red-600 mt-1">{{ form.complimentary_reason.errors.0 }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:memberships_membership_changelist' %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <button type="submit" class="px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition">
+          Register Membership
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

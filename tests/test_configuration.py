@@ -11,7 +11,11 @@ def test_all_admins_use_unfold():
         "accounts.User", "accounts.StaffAccount", "auth.Group", "core.GymProfile",
         "core.GymSettings", "core.GymBranding", "branches.Branch",
         "branches.UserBranchAccess", "branches.BranchSettings", "branches.AuditEvent",
-        "members.Member"}
+        "members.Member",
+        "memberships.MembershipPackage", "memberships.Membership",
+        "memberships.MembershipFreeze", "memberships.MembershipRenewal",
+        "memberships.MembershipEvent",
+    }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 
 @pytest.mark.parametrize("missing", ["DJANGO_SECRET_KEY", "POSTGRES_PASSWORD"])

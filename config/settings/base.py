@@ -14,7 +14,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes", "django.contrib.sessions",
     "django.contrib.messages", "django.contrib.staticfiles",
     "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig",
-    "apps.branches.apps.BranchesConfig", "apps.members.apps.MembersConfig", "axes",
+    "apps.branches.apps.BranchesConfig", "apps.members.apps.MembersConfig",
+    "apps.memberships.apps.MembershipsConfig", "axes",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

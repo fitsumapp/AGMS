@@ -21,7 +21,45 @@
   <div class="erp-content-grid">
     <section class="erp-panel erp-panel-large" aria-label="Membership overview">
       <div class="erp-panel-head"><div><p class="erp-overline">Membership</p><h2>Membership Overview</h2></div><span class="material-symbols-outlined">query_stats</span></div>
-      {% include "admin/components/empty_state.html" with icon="monitoring" message="Available after Membership Module activation" %}
+      {% if membership_metrics.active_memberships or membership_metrics.pending_memberships or membership_metrics.frozen_memberships or membership_metrics.expired_memberships %}
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; padding: 1rem 0;">
+        <div style="padding: 0.75rem 1rem; background: rgba(15, 118, 110, 0.08); border-radius: 8px; border-left: 3px solid #0F766E;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Active</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.active_memberships }}</p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(217, 119, 6, 0.08); border-radius: 8px; border-left: 3px solid #D97706;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Pending</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.pending_memberships }}</p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(14, 165, 233, 0.08); border-radius: 8px; border-left: 3px solid #0EA5E9;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Frozen</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.frozen_memberships }}</p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.08); border-radius: 8px; border-left: 3px solid #EF4444;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expired</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.expired_memberships }}</p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(168, 85, 247, 0.08); border-radius: 8px; border-left: 3px solid #A855F7;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expiring 7d</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.expiring_7_days }}</p>
+        </div>
+      </div>
+      {% if membership_metrics.memberships_by_package %}
+      <div style="padding-top: 0.5rem; border-top: 1px solid #E2E8F0;">
+        <h4 style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Active by Package</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          {% for pkg in membership_metrics.memberships_by_package %}
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: #F1F5F9; border-radius: 9999px; font-size: 0.8rem; color: #334155;">
+            <span>{{ pkg.package__name }}</span>
+            <strong style="color: #0F766E;">{{ pkg.total }}</strong>
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% else %}
+      {% include "admin/components/empty_state.html" with icon="monitoring" message="No active or pending subscriptions in selected branch scope." %}
+      {% endif %}
     </section>
     <section class="erp-panel" aria-label="Branch performance">
       <div class="erp-panel-head"><div><p class="erp-overline">Operations</p><h2>Branch Performance</h2></div><span class="material-symbols-outlined">location_city</span></div>

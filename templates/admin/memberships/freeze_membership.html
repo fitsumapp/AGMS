@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Membership Freeze</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Request Freeze: {{ membership.membership_number }}
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Member: <strong>{{ membership.member.member_number }} · {{ membership.member.full_name }}</strong> | Package: <strong>{{ membership.package.name }}</strong>
+      </p>
+      <p class="text-xs text-subtle mt-1">
+        Package Freeze Policy: Max {{ membership.package.max_freeze_days|default:"Unlimited" }} total days, Max {{ membership.package.max_freeze_requests|default:"Unlimited" }} requests.
+      </p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="p-3 bg-red-100 border border-red-200 text-red-800 rounded-lg text-sm">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div>
+        <label for="id_requested_start_date" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.requested_start_date.label }}
+        </label>
+        {{ form.requested_start_date }}
+        {% if form.requested_start_date.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.requested_start_date.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_requested_end_date" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.requested_end_date.label }} (Exclusive)
+        </label>
+        {{ form.requested_end_date }}
+        {% if form.requested_end_date.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.requested_end_date.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label for="id_reason" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ form.reason.label }}
+        </label>
+        {{ form.reason }}
+        {% if form.reason.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.reason.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div class="pt-2">
+        <label class="flex items-center space-x-2 text-sm text-subtle">
+          <input type="checkbox" name="immediate_approval" value="true" class="rounded border-base-300">
+          <span>Approve immediately (Requires Branch Manager or Owner)</span>
+        </label>
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:memberships_membership_change' membership.pk %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <button type="submit" class="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition">
+          Submit Freeze
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
