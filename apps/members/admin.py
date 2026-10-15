@@ -85,6 +85,12 @@ class MemberNoteInline(StackedInline):
                 return qs.filter(category=MemberNote.NoteCategory.GENERAL)
         return qs
 
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        if db_field.name == "category":
+            if (has_role(request.user, "Receptionist") or has_role(request.user, "Accountant")) and not is_owner(request.user) and not has_role(request.user, "Branch Manager"):
+                kwargs["choices"] = [(MemberNote.NoteCategory.GENERAL, "General / Public")]
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
+
     def has_add_permission(self, request, obj=None):
         if has_role(request.user, "Accountant") or has_role(request.user, "Trainer") or has_role(request.user, "POS Staff"):
             return False
@@ -270,7 +276,7 @@ class MemberAdmin(ModelAdmin):
             raise PermissionDenied("You cannot change member status for this branch.")
 
         if request.method == "POST":
-            form = MemberStatusChangeForm(request.POST)
+            form = MemberStatusChangeForm(request.POST, user=request.user)
             if form.is_valid():
                 try:
                     change_member_status(
@@ -284,7 +290,7 @@ class MemberAdmin(ModelAdmin):
                 except (ValidationError, PermissionDenied) as exc:
                     messages.error(request, str(exc))
         else:
-            form = MemberStatusChangeForm(initial={"new_status": member.status})
+            form = MemberStatusChangeForm(initial={"new_status": member.status}, user=request.user)
 
         context = {
             **self.admin_site.each_context(request),

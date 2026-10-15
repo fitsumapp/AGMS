@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.core.models import AuditFieldMixin, UUIDTimeStampedModel
@@ -147,6 +147,10 @@ class Member(UUIDTimeStampedModel, AuditFieldMixin):
         if not self.member_number:
             from .sequence import generate_next_member_number
             self.member_number = generate_next_member_number()
+        elif not self._state.adding and self.pk:
+            original = Member.objects.filter(pk=self.pk).values("member_number").first()
+            if original and original["member_number"] and self.member_number != original["member_number"]:
+                raise ValidationError({"member_number": "Member number is immutable after registration."})
         self.full_clean()
         return super().save(*args, **kwargs)
 
@@ -198,12 +202,15 @@ class MemberEmergencyContact(UUIDTimeStampedModel):
             self.alternative_phone = normalize_ethiopian_phone(self.alternative_phone)
 
     def save(self, *args, **kwargs):
-        if self.is_primary and self.member_id:
-            MemberEmergencyContact.objects.filter(
-                member_id=self.member_id, is_primary=True
-            ).exclude(pk=self.pk).update(is_primary=False)
-        self.full_clean()
-        return super().save(*args, **kwargs)
+        with transaction.atomic():
+            if self.is_primary and self.member_id:
+                # Row-lock parent member to serialize primary contact reassignment under concurrency
+                Member.objects.select_for_update().filter(pk=self.member_id).values("id").first()
+                MemberEmergencyContact.objects.filter(
+                    member_id=self.member_id, is_primary=True
+                ).exclude(pk=self.pk).update(is_primary=False)
+            self.full_clean()
+            return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.full_name} ({self.relationship}) → {self.member.member_number}"
@@ -302,6 +309,10 @@ class MemberNote(UUIDTimeStampedModel):
         self.note = (self.note or "").strip()
         if not self.note:
             raise ValidationError({"note": "Note text cannot be empty."})
+        if self.created_by_id and self.category != self.NoteCategory.GENERAL:
+            from apps.accounts.roles import has_role, is_owner
+            if (has_role(self.created_by, "Receptionist") or has_role(self.created_by, "Accountant")) and not is_owner(self.created_by) and not has_role(self.created_by, "Branch Manager"):
+                raise ValidationError({"category": "Staff with your role can only create General notes."})
 
     def save(self, *args, **kwargs):
         self.full_clean()

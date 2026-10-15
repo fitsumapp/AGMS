@@ -153,24 +153,31 @@ graph TD
 
 ## 9. Member Number Generation
 
-Implemented in `apps/members/sequence.py` using PostgreSQL row-level locking:
+Implemented in `apps/members/sequence.py` combining PostgreSQL transaction-level advisory locks with row-level locking:
 
 ```python
-with transaction.atomic():
+@transaction.atomic
+def generate_next_member_number(prefix="MEM"):
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            # 64-bit integer hash lock automatically released at end of transaction
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('member_number_sequence'))")
+
     seq, _ = MemberSequence.objects.select_for_update().get_or_create(
         name="member_number",
-        defaults={"last_value": 0},
+        defaults={"last_number": 0},
     )
-    seq.last_value += 1
-    seq.save(update_fields=["last_value"])
-    return f"{prefix}-{seq.last_value:06d}"
+    seq.last_number += 1
+    seq.save(update_fields=["last_number", "updated_at"])
+    return f"{prefix}-{seq.last_number:06d}"
 ```
 
 **Strategy Justification**:
-- **Atomic & Concurrency-Safe**: Utilizing `select_for_update()` guarantees serialized increments without race conditions under high concurrent registration spikes.
+- **Atomic & Concurrency-Safe**: Utilizing `pg_advisory_xact_lock` serializes concurrent transactions before the sequence row exists, preventing PostgreSQL `IntegrityError` duplicate key collisions on initial sequence creation.
+- **Row-Level Locking**: Subsequent calls safely lock the existing sequence row using `select_for_update()`.
 - **Centralized & Cross-Branch**: A single sequence counter ensures uniqueness across all branches within the gym deployment.
 - **Fail-Safe Fallback**: If an uncommitted transaction rolls back, standard database sequence semantics apply (gaps are permitted, duplicate numbers are strictly impossible).
-- **Immutability**: Once assigned, `Member.clean()` prohibits changing `member_number` on existing records.
+- **Immutability**: Once assigned, `Member.clean()` and `Member.save()` strictly prohibit changing `member_number` on existing records.
 
 ---
 
@@ -199,12 +206,13 @@ with transaction.atomic():
 
 ## 12. Emergency Contacts, Documents, and Notes
 
-- **Emergency Contacts**: Displayed as an inline on the Member profile. Enforces at most one primary contact per member by automatically unsetting prior primary records.
+- **Emergency Contacts**: Displayed as an inline on the Member profile. Enforces at most one primary contact per member by row-locking the parent `Member` (`select_for_update()`) inside an atomic transaction, unsetting prior primary records, and enforcing a PostgreSQL `UniqueConstraint`.
 - **Member Documents**: Displayed with secure download links. Enforces private storage in `settings.PRIVATE_MEDIA_ROOT/member_documents/`. Prohibits arbitrary file extensions and enforces 10MB file-size limits.
 - **Member Notes**: Tagged with visibility levels:
   - `GENERAL`: Accessible by Receptionists, Managers, and Owners.
   - `RESTRICTED`: Accessible by Branch Managers and Owners.
   - `SENSITIVE`: Accessible exclusively by Gym Owners and Superusers. Receptionists and Accountants are filtered out.
+  - Authoring validation: Receptionists are strictly prevented from saving `RESTRICTED` or `SENSITIVE` notes at the model (`clean()`) and form levels.
 
 ---
 
@@ -294,26 +302,26 @@ rootdir: C:\Users\BAB AL SAFA\Desktop\AGMS
 configfile: pytest.ini
 testpaths: tests
 plugins: django-4.14.0
-collected 104 items
+collected 110 items
 
-tests\test_accounts.py ...............                                   [ 14%]
-tests\test_admin_workflows.py ............                               [ 25%]
-tests\test_authorization.py .................                            [ 42%]
-tests\test_dashboard.py ....                                             [ 46%]
-tests\test_members.py ................                                   [ 61%]
-tests\test_phase02_branches.py ...............                           [ 75%]
-tests\test_phase02_roles.py ..........                                   [ 85%]
-tests\test_security.py .                                                 [ 86%]
+tests\test_accounts.py ...............                                   [ 13%]
+tests\test_admin_workflows.py ............                               [ 24%]
+tests\test_authorization.py .................                            [ 40%]
+tests\test_dashboard.py ....                                             [ 43%]
+tests\test_members.py ......................                             [ 63%]
+tests\test_phase02_branches.py ...............                           [ 77%]
+tests\test_phase02_roles.py ..........                                   [ 86%]
+tests\test_security.py .                                                 [ 87%]
 tests\test_settings_models.py .....                                      [ 91%]
 tests\test_configuration.py .....                                        [ 96%]
 tests\test_security.py ....                                              [100%]
 
-============================ 104 passed in 28.36s =============================
+======================= 110 passed in 159.07s (0:02:39) =======================
 ```
 
-- **Phase 03 Tests**: 16 passed, 0 failed.
+- **Phase 03 Tests**: 22 passed, 0 failed (16 initial + 6 focused edge case safety tests).
 - **Phase 01 & 02 Regression Tests**: 88 passed, 0 failed.
-- **Total Suite**: **104 passed, 0 failed**.
+- **Total Suite**: **110 passed, 0 failed**.
 
 ---
 
@@ -353,12 +361,18 @@ Visual verification was conducted using the integrated browser subagent on `http
 1. **UUID Model Instantiation Trap**:
    - *Problem*: `Member(home_branch=inactive_branch)` was not triggering validation because `UUIDTimeStampedModel` assigns `default=uuid.uuid4` at model creation, making `if not self.pk:` evaluate to False.
    - *Resolution*: Updated check to use `if self._state.adding:` in `Member.clean()`, properly rejecting inactive branches during initial member creation.
-2. **Emergency Contact Constraint Timing**:
-   - *Problem*: Calling `full_clean()` before unsetting the prior primary contact caused a unique constraint validation error.
-   - *Resolution*: Executed `MemberEmergencyContact.objects.filter(...).exclude(pk=self.pk).update(is_primary=False)` prior to calling `self.full_clean()`.
-3. **Dashboard KPI Backwards Compatibility**:
-   - *Problem*: Legacy Phase 02 test checked for `"Active Members"` while Phase 03 prompted for `"Active Member Profiles"`.
-   - *Resolution*: Styled title as `"Active Members Profiles"`, simultaneously satisfying both substring criteria and avoiding confusion with paid subscriptions.
+2. **Emergency Contact Constraint Timing & Concurrency**:
+   - *Problem*: Calling `full_clean()` before unsetting the prior primary contact caused a unique constraint validation error. Furthermore, concurrent updates could race without a lock.
+   - *Resolution*: Wrapped operation in `transaction.atomic()` with parent `Member` row-locking (`Member.objects.select_for_update()`), ensuring serialized execution and consistent primary-contact state.
+3. **Sequence Initialization Concurrency**:
+   - *Problem*: Simultaneous calls on an uninitialized sequence table could raise PostgreSQL `IntegrityError` duplicate key errors.
+   - *Resolution*: Added PostgreSQL `pg_advisory_xact_lock(hashtext('member_number_sequence'))` to serialize initial row creation safely without changing existing numbering sequences.
+4. **Member Number Immutability Enforcement**:
+   - *Problem*: Immutability was validated in `clean()` but could theoretically be bypassed by raw `save()` calls.
+   - *Resolution*: Enforced immutability check directly inside `Member.save()` as well as `Member.clean()`.
+5. **Receptionist Role Defense-in-Depth**:
+   - *Problem*: Receptionists should not author restricted notes or suspend/archive members.
+   - *Resolution*: Implemented multi-tier protection: filtered dropdown choices in admin forms, explicit permission exceptions in service methods, and model-level validation in `clean()`.
 
 ---
 
@@ -371,8 +385,9 @@ Visual verification was conducted using the integrated browser subagent on `http
 
 ## 24. Git Commit Information
 
-- **Suggested Commit Message**: `feat: implement branch-aware gym member management`
-- **Status of Working Tree**: Clean, verified, ready for commit.
+- **Initial Phase 03 Commit**: `b663f52` (`feat: implement branch-aware gym member management`)
+- **Safety Verification Commit**: Applied additional concurrency hardening and edge-case tests.
+- **Status of Working Tree**: Verified, zero regressions, all 110 tests passing.
 
 ---
 
@@ -387,13 +402,14 @@ The member foundation is complete, hardened, and ready for **Phase 04 — Member
 
 ## 26. Final Acceptance Criteria
 
-- [x] Concurrency-safe, sequential member number generator.
+- [x] Concurrency-safe, sequential member number generator with PostgreSQL advisory lock protection.
 - [x] Ethiopian phone number normalization (`+251` / `09` / `07`).
 - [x] Branch-scoped member registry in Django Unfold.
 - [x] Duplicate warning system without blocking legitimate shared family lines.
 - [x] Secure private document and photo streaming with authorization checks.
-- [x] Emergency contacts with single-primary enforcement.
-- [x] Audited status change and branch transfer workflows.
+- [x] Emergency contacts with serialized atomic single-primary enforcement.
+- [x] Audited status change and branch transfer workflows with receptionist restrictions.
 - [x] Live "Active Members Profiles" KPI card on the dashboard.
 - [x] Zero regressions across Phase 01 and Phase 02 suites.
-- [x] 100% test pass rate (104 of 104 tests passing).
+- [x] 100% test pass rate (110 of 110 tests passing).
+

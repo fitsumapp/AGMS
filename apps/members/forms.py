@@ -145,3 +145,14 @@ class MemberStatusChangeForm(forms.Form):
         help_text="Provide reason for this status change (mandatory for Suspension).",
         required=True,
     )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            from apps.accounts.roles import has_role, is_owner
+            if has_role(user, "Receptionist") and not is_owner(user) and not has_role(user, "Branch Manager"):
+                self.fields["new_status"].choices = [
+                    (Member.MemberStatus.ACTIVE, "Active"),
+                    (Member.MemberStatus.INACTIVE, "Inactive"),
+                ]
+

@@ -506,3 +506,122 @@ def test_admin_changelist_branch_scoping(client, branch_manager_a, receptionist_
     assert res_owner.status_code == 200
     assert m_a.member_number.encode() in res_owner.content
     assert m_b.member_number.encode() in res_owner.content
+
+
+# ==============================================================================
+# 11. Safety Verification & Edge Case Tests
+# ==============================================================================
+
+def test_direct_save_immutability_enforced(gym_owner, branch_a):
+    m = register_member(
+        actor=gym_owner,
+        home_branch=branch_a,
+        first_name="Immutable",
+        last_name="Test",
+        phone="0911776655",
+    )
+    original_number = m.member_number
+    m.member_number = "MEM-999999"
+    with pytest.raises(ValidationError) as exc:
+        m.save()
+    assert "member_number" in exc.value.message_dict
+
+
+def test_empty_sequence_table_generation():
+    MemberSequence.objects.all().delete()
+    assert MemberSequence.objects.count() == 0
+    num1 = generate_next_member_number()
+    assert num1 == "MEM-000001"
+    num2 = generate_next_member_number()
+    assert num2 == "MEM-000002"
+    assert MemberSequence.objects.count() == 1
+
+
+def test_receptionist_crafted_post_status_suspension_denied(client, receptionist_a, gym_owner, branch_a):
+    m = register_member(
+        actor=gym_owner,
+        home_branch=branch_a,
+        first_name="Target",
+        last_name="Member",
+        phone="0911554433",
+    )
+    client.force_login(receptionist_a)
+    status_url = reverse("admin:member-change-status", args=[m.pk])
+
+    # Crafted POST attempting suspension
+    res = client.post(status_url, {
+        "new_status": Member.MemberStatus.SUSPENDED,
+        "reason": "Crafted suspension attempt",
+    })
+    # Form rejects choice as invalid for receptionist, and member status remains ACTIVE
+    m.refresh_from_db()
+    assert m.status == Member.MemberStatus.ACTIVE
+
+
+def test_receptionist_crafted_post_transfer_denied(client, receptionist_a, gym_owner, branch_a, branch_b):
+    m = register_member(
+        actor=gym_owner,
+        home_branch=branch_a,
+        first_name="Transfer",
+        last_name="Target",
+        phone="0911223388",
+    )
+    client.force_login(receptionist_a)
+    transfer_url = reverse("admin:member-transfer-branch", args=[m.pk])
+
+    # Crafted POST attempting branch transfer
+    res = client.post(transfer_url, {
+        "new_branch": str(branch_b.pk),
+        "reason": "Unauthorized transfer",
+    })
+    assert res.status_code == 403
+    m.refresh_from_db()
+    assert m.home_branch == branch_a
+
+
+def test_receptionist_sensitive_note_rejected_at_model_level(gym_owner, receptionist_a, branch_a):
+    m = register_member(
+        actor=gym_owner,
+        home_branch=branch_a,
+        first_name="Note",
+        last_name="Target",
+        phone="0911445566",
+    )
+    note = MemberNote(
+        member=m,
+        category=MemberNote.NoteCategory.SENSITIVE,
+        note="Top secret note",
+        created_by=receptionist_a,
+    )
+    with pytest.raises(ValidationError) as exc:
+        note.save()
+    assert "category" in exc.value.message_dict
+
+
+def test_emergency_contact_atomic_unseat_primary(gym_owner, branch_a):
+    member = register_member(
+        actor=gym_owner,
+        home_branch=branch_a,
+        first_name="Primary",
+        last_name="ContactCheck",
+        phone="0911332211",
+    )
+    c1 = MemberEmergencyContact.objects.create(
+        member=member, full_name="Contact One", relationship="Friend", phone="0911000001", is_primary=True,
+    )
+    c2 = MemberEmergencyContact.objects.create(
+        member=member, full_name="Contact Two", relationship="Brother", phone="0911000002", is_primary=True,
+    )
+    c3 = MemberEmergencyContact.objects.create(
+        member=member, full_name="Contact Three", relationship="Sister", phone="0911000003", is_primary=True,
+    )
+
+    c1.refresh_from_db()
+    c2.refresh_from_db()
+    c3.refresh_from_db()
+
+    assert c1.is_primary is False
+    assert c2.is_primary is False
+    assert c3.is_primary is True
+    assert MemberEmergencyContact.objects.filter(member=member, is_primary=True).count() == 1
+
