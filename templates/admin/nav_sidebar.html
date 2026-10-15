@@ -5,14 +5,14 @@
      x-on:mousemove.window="if (resizing) { sidebarWidth = Math.min(max, Math.max(min, getComputedStyle($el).direction === 'rtl' ? document.getElementById('nav-sidebar').getBoundingClientRect().right - $event.clientX : $event.clientX)); localStorage.setItem('sidebarWidth', sidebarWidth); }"
      x-on:mouseup.window="resizing = false"
      x-data="{ min: 220, max: 360, resizing: false }"
-     @keydown.escape.window="if (sidebarOpen && window.innerWidth < 1280) { sidebarToggle(); }"
+     @keydown.escape.window="if (window.innerWidth < 1280 && sidebarOpen) { sidebarToggle(); }"
      x-init="$watch('sidebarOpen', val => {
          if (window.innerWidth < 1280) {
              document.body.classList.toggle('overflow-hidden', val);
          }
      })">
 
-    <!-- Mobile Backdrop Overlay with blur and fade -->
+    <!-- Mobile Backdrop Overlay: only active on mobile/tablet (xl:hidden) -->
     <div class="erp-sidebar-backdrop fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 xl:hidden"
          x-show="sidebarOpen"
          x-transition:enter="transition-opacity ease-out duration-200"
@@ -26,22 +26,16 @@
          aria-hidden="true">
     </div>
 
-    <!-- Navigation Drawer Wrapper -->
+    <!-- Navigation Wrapper: Relative on desktop (xl:relative), Fixed on mobile -->
     <div class="fixed xl:relative {% element_classes 'navigation_wrapper' %} erp-navigation-wrapper"
          x-show="sidebarOpen"
-         x-transition:enter="transition transform ease-out duration-200"
-         x-transition:enter-start="-translate-x-full rtl:translate-x-full"
-         x-transition:enter-end="translate-x-0"
-         x-transition:leave="transition transform ease-in duration-150"
-         x-transition:leave-start="translate-x-0"
-         x-transition:leave-end="-translate-x-full rtl:translate-x-full"
-         x-bind:style="window.innerWidth < 1280 ? '' : `width: ${sidebarWidth}px`">
+         x-bind:style="`width: ${sidebarWidth}px`">
 
-        <div class="bg-base-50 relative z-55 dark:bg-base-900 h-full">
+        <div class="bg-base-50 relative z-30 dark:bg-base-900 h-full">
             <aside id="nav-sidebar"
                    aria-label="{% trans 'Sidebar Navigation' %}"
                    class="bg-base-50 border-e border-base-200 bottom-0 fixed max-h-screen top-0 dark:border-base-800 dark:bg-base-900 {% element_classes 'navigation' %} erp-nav-sidebar"
-                   x-bind:style="window.innerWidth < 1280 ? '' : `width: ${sidebarWidth}px`"
+                   x-bind:style="`width: ${sidebarWidth}px`"
                    x-on:click="if ($event.target.closest('a') && window.innerWidth < 1280) { sidebarOpen = false; document.body.classList.remove('overflow-hidden'); }">
 
                 {% if templates.navigation %}

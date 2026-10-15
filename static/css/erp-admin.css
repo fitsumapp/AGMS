@@ -146,6 +146,31 @@ body.overflow-hidden {
   font-size: 24px !important;
 }
 
+/* Desktop Sidebar (screens >= 1280px): Always visible and properly aligned */
+@media (min-width: 1280px) {
+  .erp-navigation-wrapper {
+    position: relative !important;
+    display: block !important;
+    transform: none !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    z-index: 30 !important;
+  }
+
+  .erp-nav-sidebar,
+  #nav-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+
 @media (max-width: 1279px) {
   .erp-navigation-wrapper {
     position: fixed !important;
