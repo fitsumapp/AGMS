@@ -8,6 +8,8 @@ ALLOWED_AUDIT_KEYS = {
     "membership_number", "package_code", "payment_clearance",
     "freeze_days", "start_date", "end_date", "new_end_date",
     "rejection_reason", "idempotency_key",
+    "invoice_number", "payment_number", "refund_number",
+    "amount", "total_amount", "paid_amount", "balance_due", "payment_method",
 }
 
 

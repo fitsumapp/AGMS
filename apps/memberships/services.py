@@ -146,6 +146,13 @@ def create_membership(
         },
     )
 
+    if not is_complimentary:
+        try:
+            from apps.memberships.contracts import BillingContractService
+            BillingContractService.create_membership_invoice(membership, actor=actor)
+        except Exception:
+            pass
+
     return membership
 
 
@@ -528,6 +535,12 @@ def request_renewal(
         if not is_owner(actor) and not actor.is_superuser:
             raise PermissionDenied("Only Gym Owners or Superusers can authorize complimentary renewals.")
         return complete_renewal(actor=actor, renewal=renewal, is_complimentary=True)
+
+    try:
+        from apps.billing.integrations import MembershipBillingIntegration
+        MembershipBillingIntegration.create_renewal_invoice(renewal=renewal, actor=actor)
+    except Exception:
+        pass
 
     return renewal
 

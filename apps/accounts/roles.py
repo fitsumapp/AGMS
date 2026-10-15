@@ -25,6 +25,16 @@ ROLE_PERMISSIONS = {
             "add_membershipadjustment", "change_membershipadjustment", "delete_membershipadjustment", "view_membershipadjustment",
             "view_membershipevent",
         },
+        "billing": {
+            "add_invoice", "change_invoice", "delete_invoice", "view_invoice",
+            "add_invoiceitem", "change_invoiceitem", "delete_invoiceitem", "view_invoiceitem",
+            "add_payment", "change_payment", "delete_payment", "view_payment",
+            "add_paymentmethod", "change_paymentmethod", "delete_paymentmethod", "view_paymentmethod",
+            "add_refund", "change_refund", "delete_refund", "view_refund",
+            "add_receipt", "change_receipt", "delete_receipt", "view_receipt",
+            "add_paymentadjustment", "change_paymentadjustment", "delete_paymentadjustment", "view_paymentadjustment",
+            "view_financialauditevent",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -43,6 +53,13 @@ ROLE_PERMISSIONS = {
             "view_membershipadjustment",
             "view_membershipevent",
         },
+        "billing": {
+            "add_invoice", "change_invoice", "view_invoice",
+            "add_payment", "change_payment", "view_payment",
+            "view_paymentmethod",
+            "add_refund", "view_refund",
+            "view_receipt",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -60,6 +77,12 @@ ROLE_PERMISSIONS = {
             "add_membershipfreeze", "view_membershipfreeze",
             "view_membershipevent",
         },
+        "billing": {
+            "add_invoice", "view_invoice",
+            "add_payment", "view_payment",
+            "view_paymentmethod",
+            "view_receipt",
+        },
     },
     "Accountant": {
         "branches": {"view_branch"},
@@ -69,6 +92,14 @@ ROLE_PERMISSIONS = {
             "view_membership",
             "view_membershiprenewal",
             "view_membershipevent",
+        },
+        "billing": {
+            "view_invoice",
+            "change_payment", "view_payment",
+            "view_paymentmethod",
+            "change_refund", "view_refund",
+            "view_receipt",
+            "view_financialauditevent",
         },
     },
     "Trainer": {"branches": {"view_branch"}},

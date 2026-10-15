@@ -61,6 +61,46 @@
       {% include "admin/components/empty_state.html" with icon="monitoring" message="No active or pending subscriptions in selected branch scope." %}
       {% endif %}
     </section>
+
+    <section class="erp-panel erp-panel-large" aria-label="Collections and Billing overview">
+      <div class="erp-panel-head"><div><p class="erp-overline">Financial</p><h2>Collections & Billing Overview</h2></div><span class="material-symbols-outlined">payments</span></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; padding: 1rem 0;">
+        <div style="padding: 0.75rem 1rem; background: rgba(15, 118, 110, 0.08); border-radius: 8px; border-left: 3px solid #0F766E;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Today's Cash</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.today_collections }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(14, 165, 233, 0.08); border-radius: 8px; border-left: 3px solid #0EA5E9;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Gross Collections</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.monthly_collections }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.08); border-radius: 8px; border-left: 3px solid #EF4444;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Refunds Paid</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.refund_totals_month }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(34, 197, 94, 0.08); border-radius: 8px; border-left: 3px solid #22C55E;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Net Collections</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.net_collections_month }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: rgba(217, 119, 6, 0.08); border-radius: 8px; border-left: 3px solid #D97706;">
+          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Outstanding</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.outstanding_balances }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+        </div>
+      </div>
+      {% if billing_metrics.collections_by_method %}
+      <div style="padding-top: 0.5rem; border-top: 1px solid #E2E8F0;">
+        <h4 style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Verified Collections by Method (This Month)</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          {% for m in billing_metrics.collections_by_method %}
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: #F1F5F9; border-radius: 9999px; font-size: 0.8rem; color: #334155;">
+            <span>{{ m.payment_method__name }}</span>
+            <strong style="color: #0F766E;">{{ m.total }} ETB</strong>
+            <small style="color: #94A3B8;">({{ m.count }})</small>
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </section>
     <section class="erp-panel" aria-label="Branch performance">
       <div class="erp-panel-head"><div><p class="erp-overline">Operations</p><h2>Branch Performance</h2></div><span class="material-symbols-outlined">location_city</span></div>
       <p class="erp-panel-note">{{ branch_count }} active branch{{ branch_count|pluralize:"es" }} available in your scope</p>

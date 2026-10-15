@@ -15,6 +15,8 @@ def test_all_admins_use_unfold():
         "memberships.MembershipPackage", "memberships.Membership",
         "memberships.MembershipFreeze", "memberships.MembershipRenewal",
         "memberships.MembershipEvent",
+        "billing.Invoice", "billing.Payment", "billing.PaymentMethod",
+        "billing.Refund", "billing.Receipt", "billing.FinancialAuditEvent",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

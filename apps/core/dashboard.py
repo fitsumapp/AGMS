@@ -81,16 +81,35 @@ def dashboard(request, context):
             "memberships_by_branch": [],
         }
 
+    try:
+        from apps.billing.selectors import get_billing_metrics
+        b_metrics = get_billing_metrics(request.user, active_branch=selected_b)
+    except Exception:
+        from decimal import Decimal
+        b_metrics = {
+            "today_collections": Decimal("0.00"),
+            "monthly_collections": Decimal("0.00"),
+            "net_collections_month": Decimal("0.00"),
+            "total_invoiced_month": Decimal("0.00"),
+            "outstanding_balances": Decimal("0.00"),
+            "pending_payments_count": 0,
+            "pending_payments_amount": Decimal("0.00"),
+            "refund_totals_month": Decimal("0.00"),
+            "collections_by_branch": [],
+            "collections_by_method": [],
+        }
+
     kpi_cards = [
         {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
         {"title": "Today's Check-ins", "icon": "how_to_reg", "value": None, "status": "Awaiting attendance module", "change": None, "permission": True},
-        {"title": "Monthly Revenue", "icon": "payments", "value": None, "status": "Awaiting billing module", "change": None, "permission": True},
+        {"title": "Monthly Revenue", "icon": "payments", "value": f"{b_metrics['monthly_collections']:,.2f} ETB", "status": f"Net: {b_metrics['net_collections_month']:,.2f} ETB", "change": f"Today: {b_metrics['today_collections']:,.2f} ETB", "permission": True},
         {"title": "Active Memberships", "icon": "card_membership", "value": m_metrics["active_memberships"], "status": f"{m_metrics['pending_memberships']} pending clearance", "change": f"{m_metrics['expiring_7_days']} expiring in 7d", "permission": True},
         {"title": "Expired Memberships", "icon": "event_busy", "value": m_metrics["expired_memberships"], "status": f"{m_metrics['frozen_memberships']} frozen", "change": None, "permission": True},
+        {"title": "Outstanding Balances", "icon": "warning", "value": f"{b_metrics['outstanding_balances']:,.2f} ETB", "status": f"Pending: {b_metrics['pending_payments_count']} payments", "change": None, "permission": True},
     ]
 
     analytics_sections = [
-        ("Revenue Overview", "Revenue series will appear when billing is active."),
+        ("Revenue Overview", f"Verified Collections: {b_metrics['monthly_collections']:,.2f} ETB | Refunds: {b_metrics['refund_totals_month']:,.2f} ETB | Net: {b_metrics['net_collections_month']:,.2f} ETB"),
         ("Today's Attendance", "Check-ins will appear when attendance is active."),
         ("Upcoming Classes", "Class schedules will appear in a future phase."),
         ("Membership Expiry Alerts", f"{m_metrics['expiring_7_days']} subscriptions expiring within 7 days." if m_metrics['expiring_7_days'] else "No subscriptions expiring within 7 days."),
@@ -99,6 +118,7 @@ def dashboard(request, context):
     context.update(gym_name=site_name(request), gym_timezone=zone, current_date=local_date(zone),
         application_version=settings.APP_VERSION, database_online=database_available(), brand=PALETTE,
         membership_metrics=m_metrics,
+        billing_metrics=b_metrics,
         kpi_cards=kpi_cards,
         analytics_sections=analytics_sections,
         branch_rows=branches[:5], branch_count=len(branches))

@@ -76,3 +76,26 @@ class BillingContractService:
                 "end_date": str(membership.end_date),
             },
         )
+
+    @classmethod
+    def create_membership_invoice(cls, membership, actor=None, idempotency_key=None):
+        """Create official billing invoice via billing integration."""
+        from apps.billing.integrations import MembershipBillingIntegration
+        return MembershipBillingIntegration.create_membership_invoice(
+            membership=membership,
+            actor=actor,
+            idempotency_key=idempotency_key,
+        )
+
+    @classmethod
+    def record_payment_clearance(cls, invoice, payment):
+        """Forward payment clearance event to billing integration."""
+        from apps.billing.integrations import MembershipBillingIntegration
+        return MembershipBillingIntegration.record_payment_clearance(invoice, payment)
+
+    @classmethod
+    def process_refund_cancellation(cls, membership, refund):
+        """Forward refund effect to billing integration."""
+        from apps.billing.integrations import MembershipBillingIntegration
+        return MembershipBillingIntegration.process_refund_cancellation(membership, refund)
+

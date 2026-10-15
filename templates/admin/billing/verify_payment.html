@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Payment Verification</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Review Payment: {{ payment.payment_number }}
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Invoice: <strong>{{ payment.invoice.invoice_number }}</strong> · Member: <strong>{{ payment.invoice.member.full_name }}</strong>
+      </p>
+      <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-dashed border-base-200 dark:border-base-800 text-xs">
+        <div>
+          <span class="text-subtle">Amount:</span><br/>
+          <strong class="text-sm text-teal-600">{{ payment.amount }} ETB</strong>
+        </div>
+        <div>
+          <span class="text-subtle">Method:</span><br/>
+          <strong class="text-sm">{{ payment.payment_method.name }}</strong>
+        </div>
+        <div>
+          <span class="text-subtle">Transaction Ref:</span><br/>
+          <strong class="text-sm text-amber-600">{{ payment.transaction_reference|default:"N/A" }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div>
+        <label for="id_notes" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Verification Notes (Optional)
+        </label>
+        <textarea name="notes" id="id_notes" rows="2" class="w-full px-3 py-2 border rounded-lg dark:bg-base-950 dark:border-base-700" placeholder="e.g., CBE statement confirmed on 2026-10-15"></textarea>
+      </div>
+
+      <div class="border-t border-base-200 dark:border-base-800 pt-4">
+        <label for="id_reason" class="block text-sm font-semibold mb-1 text-red-600">
+          Rejection Reason (Required only if rejecting)
+        </label>
+        <input type="text" name="reason" id="id_reason" class="w-full px-3 py-2 border rounded-lg dark:bg-base-950 dark:border-base-700" placeholder="e.g., Transaction reference not found in bank statement">
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:billing_payment_changelist' %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <div class="flex gap-2">
+          <button type="submit" name="action" value="reject" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">
+            Reject Payment
+          </button>
+          <button type="submit" name="action" value="verify" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition">
+            Verify & Clear
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -102,12 +102,28 @@ def can_access_branch(member, branch, at_datetime=None) -> AccessResult:
 
     # 3. Payment Clearance Check
     if m.payment_clearance_status == Membership.PaymentClearance.PENDING or m.status == Membership.Status.PENDING:
-        return AccessResult(
-            False,
-            AccessResult.CODE_MEMBERSHIP_PENDING_PAYMENT,
-            f"Membership {m.membership_number} is pending billing clearance.",
-            membership=m,
-        )
+        from apps.core.models import GymSettings
+        settings_obj = GymSettings.objects.first()
+        allow_balance = settings_obj.allow_access_with_balance if settings_obj else False
+
+        has_verified_payment = False
+        if allow_balance:
+            try:
+                from apps.billing.models import Payment
+                has_verified_payment = Payment.objects.filter(
+                    invoice__membership=m,
+                    status=Payment.Status.VERIFIED,
+                ).exists()
+            except Exception:
+                has_verified_payment = False
+
+        if not (allow_balance and has_verified_payment):
+            return AccessResult(
+                False,
+                AccessResult.CODE_MEMBERSHIP_PENDING_PAYMENT,
+                f"Membership {m.membership_number} is pending billing clearance.",
+                membership=m,
+            )
 
     # 4. Freeze Status & Active Freeze Window Checks
     if m.status == Membership.Status.FROZEN:

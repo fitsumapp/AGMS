@@ -15,7 +15,7 @@ INSTALLED_APPS = [
     "django.contrib.messages", "django.contrib.staticfiles",
     "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig",
     "apps.branches.apps.BranchesConfig", "apps.members.apps.MembersConfig",
-    "apps.memberships.apps.MembershipsConfig", "axes",
+    "apps.memberships.apps.MembershipsConfig", "apps.billing.apps.BillingConfig", "axes",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

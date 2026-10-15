@@ -52,6 +52,34 @@ def can_see_memberships(request):
         return False
     return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist") or has_role(request.user, "Accountant")
 
+def can_see_billing(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    if has_role(request.user, "Trainer") or has_role(request.user, "POS Staff"):
+        return False
+    return (has_role(request.user, "Branch Manager") or
+            has_role(request.user, "Receptionist") or
+            has_role(request.user, "Accountant"))
+
+def can_see_refunds(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Accountant")
+
+def can_see_financial_audit(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Accountant")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -63,6 +91,8 @@ def primary_shades():
 def unfold_config():
     from django.utils.text import format_lazy
     membership_changelist = reverse_lazy("admin:memberships_membership_changelist")
+    invoice_changelist = reverse_lazy("admin:billing_invoice_changelist")
+    payment_changelist = reverse_lazy("admin:billing_payment_changelist")
 
     return {
         "SITE_TITLE": "apps.core.dashboard.site_name",
@@ -90,6 +120,18 @@ def unfold_config():
                 {"title": "Freeze Requests", "icon": "ac_unit", "link": reverse_lazy("admin:memberships_membershipfreeze_changelist"), "permission": can_see_memberships},
                 {"title": "Expiring Soon", "icon": "alarm", "link": format_lazy("{}?quick_filter=expiring_7_days", membership_changelist), "permission": can_see_memberships},
                 {"title": "Membership History", "icon": "history", "link": reverse_lazy("admin:memberships_membershipevent_changelist"), "permission": can_see_memberships},
+            ]},
+            {"title": "Billing & Payments", "items": [
+                {"title": "Billing Overview", "icon": "analytics", "link": reverse_lazy("admin:index"), "permission": can_see_billing},
+                {"title": "Invoices", "icon": "receipt_long", "link": invoice_changelist, "permission": can_see_billing},
+                {"title": "Create Invoice", "icon": "note_add", "link": reverse_lazy("admin:billing_invoice_create_invoice"), "permission": can_see_billing},
+                {"title": "Payments", "icon": "payments", "link": payment_changelist, "permission": can_see_billing},
+                {"title": "Pending Verification", "icon": "pending", "link": format_lazy("{}?status__exact=PENDING", payment_changelist), "permission": can_see_billing},
+                {"title": "Receipts", "icon": "receipt", "link": reverse_lazy("admin:billing_receipt_changelist"), "permission": can_see_billing},
+                {"title": "Refund Requests", "icon": "currency_exchange", "link": reverse_lazy("admin:billing_refund_changelist"), "permission": can_see_refunds},
+                {"title": "Outstanding Balances", "icon": "warning", "link": format_lazy("{}?status__in=ISSUED,PARTIALLY_PAID", invoice_changelist), "permission": can_see_billing},
+                {"title": "Payment Methods", "icon": "credit_card", "link": reverse_lazy("admin:billing_paymentmethod_changelist"), "permission": can_see_billing},
+                {"title": "Financial Audit", "icon": "policy", "link": reverse_lazy("admin:billing_financialauditevent_changelist"), "permission": can_see_financial_audit},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

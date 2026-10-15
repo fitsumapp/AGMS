@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-6">
+  <div class="erp-panel p-6 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs">
+    <div class="mb-6 border-b border-base-200 dark:border-base-800 pb-4">
+      <p class="erp-overline">Billing & Invoicing</p>
+      <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark mt-1">
+        Create Custom Invoice
+      </h1>
+      <p class="text-sm text-subtle mt-1">
+        Issue a manual or add-on charge invoice for a registered gym member.
+      </p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.help_text %}
+        <p class="text-xs text-subtle mt-1">{{ field.help_text }}</p>
+        {% endif %}
+        {% if field.errors %}
+        <p class="text-xs text-red-600 mt-1">{{ field.errors.0 }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <div class="pt-4 flex items-center justify-between border-t border-base-200 dark:border-base-800">
+        <a href="{% url 'admin:billing_invoice_changelist' %}" class="text-sm text-subtle hover:underline">
+          Cancel
+        </a>
+        <button type="submit" class="px-5 py-2.5 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition">
+          Issue Invoice
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
