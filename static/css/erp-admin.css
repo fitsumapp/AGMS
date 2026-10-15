@@ -1,52 +1,948 @@
-:root{--erp-sidebar:var(--color-sidebar-600,#103b4c);--erp-page:#f5f7fa;--erp-card:#fff;--erp-text:#0f172a;--erp-muted:#64748b;--erp-border:#e2e8f0;--erp-teal:#0f766e}
-html.dark{--erp-page:#111827;--erp-card:#1f2937;--erp-text:#f8fafc;--erp-muted:#94a3b8;--erp-border:#334155}
-#nav-sidebar,#nav-sidebar-inner{background:var(--erp-sidebar)!important;color:#e5f4f3!important}
-#nav-sidebar h2,#nav-sidebar a,#nav-sidebar .material-symbols-outlined{color:#e5f4f3!important}
-#nav-sidebar .text-important,#nav-sidebar .text-font-important-light{color:#fff!important}
-#nav-sidebar a:hover,#nav-sidebar a.active{background:rgba(255,255,255,.12)!important;color:#fff!important}
-#nav-sidebar .border-base-200,#nav-sidebar .dark\:border-base-800{border-color:rgba(255,255,255,.15)!important}
-.erp-branch-selector{display:flex;align-items:center;gap:8px;max-width:320px}
-.erp-topbar-tools{display:flex;align-items:center;gap:12px;min-width:0;margin-left:auto}
-.erp-account-menu{position:relative;flex:none}.erp-account-menu>summary{list-style:none;display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--erp-text);font-size:12px}.erp-account-menu>summary::-webkit-details-marker{display:none}
-.erp-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--erp-sidebar);color:white;font-weight:700}.erp-account-menu .material-symbols-outlined{font-size:17px}
-.erp-account-popover{position:absolute;right:0;top:37px;z-index:70;min-width:180px;border:1px solid var(--erp-border);border-radius:10px;background:var(--erp-card);box-shadow:0 10px 24px rgba(15,23,42,.15);padding:8px;color:var(--erp-text)}
-.erp-account-popover p{font-size:11px;color:var(--erp-muted);padding:7px 9px;overflow-wrap:anywhere}.erp-account-popover a,.erp-account-popover button{display:block;width:100%;text-align:left;padding:8px 9px;border-radius:6px;font-size:12px}.erp-account-popover a:hover,.erp-account-popover button:hover{background:var(--erp-page)}
-.erp-branch-label{font-size:12px;font-weight:600;color:var(--erp-muted)}
-.erp-branch-selector select{max-width:170px;min-width:110px;border:1px solid var(--erp-border);background:var(--erp-card);color:var(--erp-text);border-radius:8px;padding:7px 9px;font-size:12px}
-.erp-branch-selector button{border:1px solid var(--erp-border);border-radius:8px;padding:7px 9px;font-size:12px;font-weight:600;color:var(--erp-text)}
-.erp-branch-selector button:hover,.erp-branch-selector button:focus-visible{background:var(--color-primary-100);color:#103b4c;outline:2px solid transparent}
-.erp-dashboard{color:var(--erp-text);padding-bottom:36px}
-#main{background:var(--erp-page)!important}
-.erp-overline{text-transform:uppercase;letter-spacing:.1em;font-size:11px;font-weight:700;color:var(--erp-teal)}
-html.dark .erp-overline{color:#5eead4}
-.erp-welcome{display:flex;align-items:center;justify-content:space-between;gap:20px;background:var(--erp-card);border:1px solid var(--erp-border);border-radius:14px;padding:22px 26px;box-shadow:0 2px 10px rgba(15,23,42,.035)}
-.erp-welcome h1{font-size:23px;font-weight:700;line-height:1.25;margin:5px 0 6px}
-.erp-welcome-copy>p:last-child{font-size:13px;color:var(--erp-muted)}
-.erp-welcome-status{flex:none;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--erp-text)}
-.erp-welcome-status small{font-size:11px;font-weight:400;color:var(--erp-muted);margin-left:4px}
-.erp-status-dot{width:8px;height:8px;border-radius:50%;background:#ef4444}.erp-status-dot.is-online{background:#16a34a}
-.erp-section-title{display:flex;justify-content:space-between;align-items:end;margin:27px 0 15px}
-.erp-section-title h2,.erp-panel-head h2{font-size:18px;line-height:1.3;font-weight:700;margin-top:4px}
-.erp-context{font-size:12px;color:var(--erp-muted)}
-.erp-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-.erp-kpi-card,.erp-panel{min-width:0;background:var(--erp-card);border:1px solid var(--erp-border);border-radius:14px;box-shadow:0 2px 10px rgba(15,23,42,.035)}
-.erp-kpi-card{min-height:172px;padding:20px;display:flex;flex-direction:column}
-.erp-kpi-top{display:flex;justify-content:space-between;align-items:start;margin-bottom:16px}
-.erp-kpi-icon{display:grid;place-items:center;width:38px;height:38px;background:rgba(15,118,110,.10);color:var(--erp-teal);border-radius:10px;font-size:21px!important}
-.erp-kpi-stage{font-size:10px;color:var(--erp-muted);background:var(--erp-page);border-radius:100px;padding:4px 8px}
-.erp-kpi-card h3{font-size:13px;color:var(--erp-muted);font-weight:600}
-.erp-kpi-value{font-size:27px;font-weight:700;line-height:1.15;margin:9px 0 3px}.erp-kpi-detail{font-size:11px;color:var(--erp-muted);margin-top:auto}
-.erp-content-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
-.erp-panel{padding:21px;min-height:236px}.erp-panel-large{grid-column:span 1}
-.erp-panel-head{display:flex;justify-content:space-between;align-items:start;gap:12px}.erp-panel-head>.material-symbols-outlined{color:var(--erp-muted)}
-.erp-empty-state{min-height:126px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;color:var(--erp-muted);font-size:12px;padding:15px}
-.erp-empty-state>.material-symbols-outlined{font-size:29px;color:#94a3b8}
-.erp-loading-state{min-height:126px;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--erp-muted);font-size:12px}.erp-loading-dot{width:13px;height:13px;border:2px solid var(--erp-border);border-top-color:var(--erp-teal);border-radius:50%;animation:erp-spin .8s linear infinite}@keyframes erp-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.erp-loading-dot{animation:none}}
-.erp-panel-note,.erp-panel-footnote{color:var(--erp-muted);font-size:12px;margin-top:12px}
-.erp-panel-footnote{border-top:1px solid var(--erp-border);padding-top:12px}
-.erp-branch-list{margin-top:13px}.erp-branch-list li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--erp-border)}
-.erp-branch-list li:last-child{border-bottom:0}.erp-branch-monogram{flex:none;display:grid;place-items:center;width:31px;height:31px;border-radius:8px;background:rgba(15,118,110,.11);color:var(--erp-teal);font-weight:700}
-.erp-branch-list strong{display:block;font-size:12px}.erp-branch-list small{display:block;color:var(--erp-muted);font-size:11px}.erp-branch-active{margin-left:auto;font-size:10px;color:#15803d}
-@media(max-width:1100px){.erp-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:700px){.erp-content-grid{grid-template-columns:1fr}.erp-welcome{align-items:start;flex-direction:column}.erp-welcome-status{flex-wrap:wrap}.erp-branch-label{display:none}}
-@media(max-width:460px){.erp-kpi-grid{grid-template-columns:1fr}.erp-topbar-tools{gap:6px}.erp-account-name{display:none}.erp-branch-selector{max-width:140px;gap:4px}.erp-branch-selector select{min-width:65px;max-width:85px}.erp-branch-selector button{padding:7px 5px}.erp-welcome{padding:18px}.erp-welcome h1{font-size:20px}}
+/* ==========================================================================
+   AGMS Phase 02 Final UI Polish & Full Mobile Responsiveness
+   Technology: Django + PostgreSQL + Django Unfold Admin
+   Palette: Dark Teal Sidebar (#103B4C), Primary Teal (#0F766E), Light/Dark
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Theme Variables & Base Resets
+   -------------------------------------------------------------------------- */
+:root {
+  --erp-sidebar: var(--color-sidebar-600, #103b4c);
+  --erp-sidebar-active: rgba(255, 255, 255, 0.14);
+  --erp-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --erp-page: #f8fafc;
+  --erp-card: #ffffff;
+  --erp-text: #0f172a;
+  --erp-muted: #64748b;
+  --erp-border: #e2e8f0;
+  --erp-teal: #0f766e;
+  --erp-teal-light: rgba(15, 118, 110, 0.10);
+  --erp-teal-hover: #115e59;
+  --erp-focus-ring: rgba(15, 118, 110, 0.35);
+  --erp-touch-target: 44px;
+}
+
+html.dark {
+  --erp-page: #0f172a;
+  --erp-card: #1e293b;
+  --erp-text: #f8fafc;
+  --erp-muted: #94a3b8;
+  --erp-border: #334155;
+  --erp-teal: #2dd4bf;
+  --erp-teal-light: rgba(45, 212, 191, 0.14);
+  --erp-teal-hover: #14b8a6;
+  --erp-focus-ring: rgba(45, 212, 191, 0.4);
+}
+
+/* Prevent horizontal page blowouts on all screen sizes */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body.overflow-hidden {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+#main {
+  background: var(--erp-page) !important;
+  min-width: 0;
+  max-width: 100vw;
+}
+
+/* --------------------------------------------------------------------------
+   2. Dark Teal Sidebar & Branding Fixes
+   -------------------------------------------------------------------------- */
+#nav-sidebar,
+#nav-sidebar-inner {
+  background: var(--erp-sidebar) !important;
+  color: #e2f1f0 !important;
+}
+
+#nav-sidebar h2,
+#nav-sidebar a,
+#nav-sidebar .material-symbols-outlined {
+  color: #e2f1f0 !important;
+}
+
+#nav-sidebar .text-important,
+#nav-sidebar .text-font-important-light,
+#nav-sidebar .text-font-important-dark {
+  color: #ffffff !important;
+}
+
+#nav-sidebar a:hover {
+  background: var(--erp-sidebar-hover) !important;
+  color: #ffffff !important;
+}
+
+#nav-sidebar a.active {
+  background: var(--erp-sidebar-active) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+#nav-sidebar .border-base-200,
+#nav-sidebar .dark\:border-base-800 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Fix truncated sidebar branding text: allow clean wrapping, no abrupt ellipsis */
+#site-name,
+#site-name a {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  word-break: break-word !important;
+  line-height: 1.25 !important;
+  color: #ffffff !important;
+}
+
+#nav-sidebar [class*="*:truncate"] > * {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+
+/* Logo scaling across all screen sizes */
+#nav-sidebar img,
+.erp-topbar-tools img,
+#site-name img,
+.unfold-site-logo img {
+  max-height: 38px !important;
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain;
+}
+
+/* --------------------------------------------------------------------------
+   3. Mobile Off-Canvas Sidebar & Hamburger Menu
+   -------------------------------------------------------------------------- */
+.erp-sidebar-backdrop {
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  background-color: rgba(15, 23, 42, 0.65);
+}
+
+.erp-sidebar-toggle-btn {
+  min-width: var(--erp-touch-target);
+  min-height: var(--erp-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.erp-sidebar-toggle-btn:focus-visible {
+  outline: 2px solid var(--erp-teal);
+  outline-offset: 2px;
+}
+
+.erp-menu-icon {
+  font-size: 24px !important;
+}
+
+@media (max-width: 1279px) {
+  .erp-navigation-wrapper {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 60 !important;
+    width: min(85vw, 320px) !important;
+    max-width: 85vw !important;
+  }
+
+  .erp-nav-sidebar {
+    width: min(85vw, 320px) !important;
+    max-width: 85vw !important;
+    box-shadow: 4px 0 28px rgba(0, 0, 0, 0.4) !important;
+    z-index: 60 !important;
+  }
+
+  /* Hide desktop resize handle on mobile/tablet */
+  #nav-sidebar .resize {
+    display: none !important;
+  }
+}
+
+/* Avoid covering navigation items with the bottom profile section */
+#nav-sidebar-apps {
+  padding-bottom: 32px !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Topbar & Header Polish
+   -------------------------------------------------------------------------- */
+.erp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.erp-topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.erp-header-title {
+  font-weight: 700;
+  color: var(--erp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Branch selector controls */
+.erp-branch-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  min-width: 0;
+}
+
+.erp-branch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--erp-muted);
+  white-space: nowrap;
+}
+
+.erp-branch-icon {
+  font-size: 18px !important;
+  color: var(--erp-teal);
+}
+
+.erp-branch-selector select {
+  min-height: 38px;
+  max-width: 160px;
+  min-width: 95px;
+  border: 1px solid var(--erp-border);
+  background: var(--erp-card);
+  color: var(--erp-text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.erp-branch-selector select:focus {
+  outline: 2px solid var(--erp-teal);
+  outline-offset: 1px;
+  border-color: var(--erp-teal);
+}
+
+.erp-branch-submit {
+  min-height: 38px;
+  min-width: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--erp-border);
+  background: var(--erp-card);
+  color: var(--erp-text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.erp-branch-submit:hover,
+.erp-branch-submit:focus-visible {
+  background: var(--erp-teal-light);
+  color: var(--erp-teal);
+  border-color: var(--erp-teal);
+  outline: 2px solid transparent;
+}
+
+.erp-branch-submit-icon {
+  font-size: 16px !important;
+  display: none;
+}
+
+.erp-context-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--erp-teal-light);
+  color: var(--erp-teal);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* User Account Menu */
+.erp-account-menu {
+  position: relative;
+  flex: none;
+}
+
+.erp-account-menu > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: var(--erp-text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px;
+  border-radius: 8px;
+  min-height: var(--erp-touch-target);
+  transition: background-color 0.15s ease;
+}
+
+.erp-account-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.erp-account-menu > summary:hover {
+  background: var(--erp-teal-light);
+}
+
+.erp-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--erp-sidebar);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.erp-account-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.erp-account-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 70;
+  min-width: 220px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--erp-border);
+  border-radius: 12px;
+  background: var(--erp-card);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  padding: 8px;
+  color: var(--erp-text);
+}
+
+.erp-account-email {
+  font-size: 11px;
+  color: var(--erp-muted);
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--erp-border);
+  margin-bottom: 4px;
+}
+
+.erp-account-popover a,
+.erp-account-popover button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--erp-text);
+  min-height: 40px;
+  transition: background-color 0.15s ease;
+}
+
+.erp-account-popover a:hover,
+.erp-account-popover button:hover {
+  background: var(--erp-teal-light);
+  color: var(--erp-teal);
+}
+
+/* --------------------------------------------------------------------------
+   5. Dashboard Responsive Grid & Typography
+   -------------------------------------------------------------------------- */
+.erp-dashboard {
+  color: var(--erp-text);
+  padding-bottom: 48px;
+  min-width: 0;
+}
+
+.erp-overline {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--erp-teal);
+}
+
+/* Welcome Banner */
+.erp-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--erp-card);
+  border: 1px solid var(--erp-border);
+  border-radius: 14px;
+  padding: 22px 26px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+  min-width: 0;
+}
+
+.erp-welcome-copy {
+  min-width: 0;
+}
+
+.erp-welcome h1 {
+  font-size: clamp(1.2rem, 3.2vw, 1.55rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 6px 0 6px;
+  word-break: break-word;
+}
+
+.erp-welcome-copy > p:last-child {
+  font-size: 13px;
+  color: var(--erp-muted);
+  line-height: 1.4;
+}
+
+.erp-welcome-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--erp-text);
+}
+
+.erp-welcome-status small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--erp-muted);
+  margin-left: 4px;
+}
+
+.erp-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+.erp-status-dot.is-online {
+  background: #16a34a;
+}
+
+.erp-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin: 28px 0 16px;
+  gap: 12px;
+}
+
+.erp-section-title h2,
+.erp-panel-head h2 {
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.erp-context {
+  font-size: 12px;
+  color: var(--erp-muted);
+  white-space: nowrap;
+}
+
+/* KPI Cards Grid */
+.erp-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.erp-kpi-card,
+.erp-panel {
+  min-width: 0;
+  background: var(--erp-card);
+  border: 1px solid var(--erp-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.erp-kpi-card {
+  min-height: 148px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.erp-kpi-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.erp-kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: var(--erp-teal-light);
+  color: var(--erp-teal);
+  border-radius: 10px;
+  font-size: 20px !important;
+  flex-shrink: 0;
+}
+
+.erp-kpi-stage {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--erp-muted);
+  background: var(--erp-page);
+  border: 1px solid var(--erp-border);
+  border-radius: 100px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.erp-kpi-card h3 {
+  font-size: 13px;
+  color: var(--erp-muted);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.erp-kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 6px 0 2px;
+}
+
+.erp-kpi-detail {
+  font-size: 11px;
+  color: var(--erp-muted);
+  margin-top: auto;
+  line-height: 1.3;
+}
+
+/* Analytics Panels Content Grid */
+.erp-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.erp-panel {
+  padding: 20px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.erp-panel-large {
+  grid-column: span 1;
+}
+
+.erp-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.erp-panel-head > .material-symbols-outlined {
+  color: var(--erp-muted);
+}
+
+.erp-empty-state {
+  flex: 1;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  color: var(--erp-muted);
+  font-size: 12px;
+  padding: 16px;
+}
+
+.erp-empty-state > .material-symbols-outlined {
+  font-size: 28px;
+  color: var(--erp-muted);
+}
+
+.erp-loading-state {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--erp-muted);
+  font-size: 12px;
+}
+
+.erp-loading-dot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--erp-border);
+  border-top-color: var(--erp-teal);
+  border-radius: 50%;
+  animation: erp-spin 0.8s linear infinite;
+}
+
+@keyframes erp-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .erp-loading-dot { animation: none; }
+}
+
+.erp-panel-note,
+.erp-panel-footnote {
+  color: var(--erp-muted);
+  font-size: 12px;
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.erp-panel-footnote {
+  border-top: 1px solid var(--erp-border);
+  padding-top: 10px;
+  margin-top: auto;
+}
+
+.erp-branch-list {
+  margin-top: 12px;
+}
+
+.erp-branch-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.erp-branch-list li:last-child {
+  border-bottom: 0;
+}
+
+.erp-branch-monogram {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--erp-teal-light);
+  color: var(--erp-teal);
+  font-weight: 700;
+}
+
+.erp-branch-list strong {
+  display: block;
+  font-size: 13px;
+}
+
+.erp-branch-list small {
+  display: block;
+  color: var(--erp-muted);
+  font-size: 11px;
+}
+
+.erp-branch-active {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+/* --------------------------------------------------------------------------
+   6. Mobile Admin Pages (Tables, Forms, Filters, Search)
+   -------------------------------------------------------------------------- */
+/* Tables with contained horizontal scrolling */
+#changelist-form .results,
+.results,
+#changelist table,
+.change-list table {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+#changelist table th,
+#changelist table td {
+  font-size: 13px !important;
+  padding: 10px 12px !important;
+}
+
+/* Changelist search & action bar wrapping */
+#changelist-search {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+#changelist-search input[type="text"] {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+.actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 0 !important;
+}
+
+.actions select {
+  min-height: 38px !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+}
+
+.actions button {
+  min-height: 38px !important;
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+}
+
+/* Form inputs & submit rows */
+.change-form form input[type="text"],
+.change-form form input[type="password"],
+.change-form form input[type="email"],
+.change-form form input[type="url"],
+.change-form form input[type="number"],
+.change-form form select,
+.change-form form textarea {
+  max-width: 100% !important;
+  font-size: 14px !important;
+  min-height: 40px !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.submit-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  align-items: center !important;
+  padding: 16px 0 !important;
+}
+
+.submit-row input,
+.submit-row a,
+.submit-row button {
+  min-height: var(--erp-touch-target) !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Confirmation dialogs & modals */
+.delete-confirmation,
+.modal-content,
+[role="dialog"] {
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box !important;
+}
+
+/* Prominent validation errors */
+.errornote,
+.errors {
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 12px 14px !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Viewport Breakpoint Adaptations
+   -------------------------------------------------------------------------- */
+
+/* Tablet & Below (<= 1024px) */
+@media (max-width: 1023px) {
+  .erp-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .erp-content-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .erp-section-title {
+    margin: 22px 0 14px;
+  }
+}
+
+/* Standard Mobile & Phablet (<= 768px) */
+@media (max-width: 768px) {
+  .erp-welcome {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 18px 20px;
+    gap: 14px;
+  }
+
+  .erp-welcome-status {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: space-between;
+    border-top: 1px solid var(--erp-border);
+    padding-top: 10px;
+  }
+
+  .erp-account-name {
+    display: none;
+  }
+
+  .erp-branch-selector {
+    max-width: 200px;
+  }
+
+  .erp-branch-selector select {
+    max-width: 120px;
+    font-size: 12px;
+  }
+
+  .submit-row {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .submit-row input,
+  .submit-row button,
+  .submit-row a {
+    width: 100% !important;
+    text-align: center;
+  }
+}
+
+/* Compact Mobile (<= 480px / 390px / 430px) */
+@media (max-width: 480px) {
+  .erp-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .erp-kpi-card {
+    min-height: 132px;
+    padding: 16px;
+  }
+
+  .erp-welcome {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .erp-welcome h1 {
+    font-size: 1.25rem;
+  }
+
+  .erp-section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 20px 0 12px;
+  }
+
+  .erp-branch-label-text {
+    display: none;
+  }
+
+  .erp-branch-selector {
+    max-width: 160px;
+    gap: 4px;
+  }
+
+  .erp-branch-selector select {
+    max-width: 105px;
+    min-width: 80px;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+
+  .erp-branch-submit-text {
+    display: none;
+  }
+
+  .erp-branch-submit-icon {
+    display: inline-block !important;
+  }
+
+  .erp-branch-submit {
+    padding: 6px 8px;
+    min-width: 34px;
+  }
+
+  .erp-topbar-tools {
+    gap: 6px;
+  }
+}
+
+/* Ultra Small Mobile (<= 360px / 320px) */
+@media (max-width: 360px) {
+  .erp-branch-selector select {
+    max-width: 85px;
+    min-width: 65px;
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  .erp-branch-icon {
+    font-size: 16px !important;
+  }
+
+  .erp-welcome h1 {
+    font-size: 1.15rem;
+  }
+
+  .erp-panel {
+    padding: 16px;
+  }
+
+  .erp-header-title {
+    max-width: 90px;
+  }
+}

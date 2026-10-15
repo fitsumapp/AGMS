@@ -1,9 +1,19 @@
-{% if branch_options or all_branches_allowed %}<form action="{% url 'switch-branch' %}" method="post" class="erp-branch-selector" aria-label="Active branch">
+{% if branch_options or all_branches_allowed %}
+<form action="{% url 'switch-branch' %}" method="post" class="erp-branch-selector" aria-label="Active branch selector">
   {% csrf_token %}
-  <label for="active-branch" class="erp-branch-label">Branch</label>
-  <select id="active-branch" name="branch" aria-label="Active branch">
+  <label for="active-branch" class="erp-branch-label" title="Active branch context">
+    <span class="material-symbols-outlined erp-branch-icon" aria-hidden="true">store</span>
+    <span class="erp-branch-label-text">Branch</span>
+  </label>
+  <select id="active-branch" name="branch" aria-label="Active branch" onchange="this.form.submit()">
     {% if all_branches_allowed %}<option value="all" {% if not selected_branch %}selected{% endif %}>All Branches</option>{% endif %}
     {% for branch in branch_options %}<option value="{{ branch.pk }}" {% if selected_branch.pk == branch.pk %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}
   </select>
-  <button type="submit">Switch</button>
-</form>{% else %}<span class="erp-context">No branch assigned</span>{% endif %}
+  <button type="submit" class="erp-branch-submit" title="Switch active branch" aria-label="Switch active branch">
+    <span class="erp-branch-submit-text">Switch</span>
+    <span class="material-symbols-outlined erp-branch-submit-icon" aria-hidden="true">check</span>
+  </button>
+</form>
+{% else %}
+<span class="erp-context erp-context-badge">No branch assigned</span>
+{% endif %}

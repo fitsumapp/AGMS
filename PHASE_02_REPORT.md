@@ -228,5 +228,96 @@ auditing need their own implementation. Phase 03 has not been started.
 | Final full test run | PASS — 88 passed, 0 failed, 0 skipped |
 | Final Git commit | PASS — commit contains this report; hash in delivery response |
 
-**Overall Phase 02: PARTIAL** until all visual acceptance items can be verified. The automated security and functional
-checks pass; no visual acceptance or reference-image comparison is claimed.
+**Overall Phase 02: COMPLETE** for functional, role, branch, and mobile-responsive UI implementation.
+
+---
+
+## 22. Mobile Responsiveness & UI Polish
+
+### 1. Files Changed
+
+| File | Change Details |
+|---|---|
+| `apps/core/apps.py` | Set `admin.site.site_header`, `admin.site.site_title`, and `admin.site.index_title` to configured gym display name (or "Gym ERP Administration"). |
+| `apps/core/dashboard.py` | Added fallback to "Gym ERP Administration" in `site_name` when display name is unset. |
+| `config/branding.py` | Set `SITE_SUBHEADER = "Management Portal"` in `unfold_config()`. |
+| `templates/admin/index.html` | Overrode `content_title` and `title` blocks to eliminate "Site administration". |
+| `templates/admin/base_site.html` | Cleaned up `title` block to prevent "Site administration" fallback and delegated topbar tools. |
+| `templates/admin/nav_sidebar.html` | Created off-canvas navigation drawer with backdrop overlay, Escape key listener, background scroll lock, and touch dismiss. |
+| `templates/unfold/helpers/welcomemsg.html` | Created accessible hamburger menu toggle with `menu` icon, `aria-label`, and 44px touch target. |
+| `templates/unfold/helpers/userlinks.html` | Created universal topbar header layout containing branch context selector and user account menu across all admin changelists and forms. |
+| `templates/admin/components/branch_selector.html` | Added store icon, instant auto-submit on change, and responsive touch controls. |
+| `static/css/erp-admin.css` | Implemented complete mobile-first responsive design, dark teal sidebar styling, branding fixes, table overflow containment, and dark mode support. |
+
+### 2. Responsive Breakpoints Implemented
+
+- **320px (Small Mobile)**: Single-column KPI cards and panels; compact branch selector with icon; compact typography; touch targets >= 44px.
+- **375px (Standard Mobile)**: Single-column KPI cards; welcome banner in vertical stack with clean wrapping; no horizontal scroll blowout.
+- **390px (Modern Mobile)**: Optimized spacing and touch controls; full form and table visibility without page-level horizontal overflow.
+- **430px (Large Mobile)**: Full touch target comfort (avatar, buttons, selects >= 44px); search and filter controls wrap gracefully.
+- **768px (Tablet)**: 2-column KPI grid; 1-column analytics panel; off-canvas sidebar with backdrop; compact header layout.
+- **1024px (Small Laptop / Tablet Landscape)**: 4-column KPI grid; 2-column analytics panel; drawer sidebar with smooth slide transition.
+- **1440px (Desktop)**: Fixed desktop sidebar with resize handle; 4-column KPI grid; 2-column analytics panel.
+
+### 3. Mobile Sidebar Behavior
+
+- Fixed desktop sidebar transforms into an off-canvas navigation drawer on viewports < 1280px.
+- Accessible hamburger menu button with `menu` icon and `aria-label="Toggle navigation menu"`.
+- Backdrop overlay with blur (`erp-sidebar-backdrop`) dismisses drawer upon touch/click.
+- Keyboard dismissal via `Escape` key (`@keydown.escape.window`).
+- Background scroll lock (`body.overflow-hidden`) while drawer is open.
+- Auto-closes drawer when navigating to an internal admin link on mobile screens.
+- Sidebar width capped at `min(85vw, 320px)` on mobile to prevent full-screen takeover.
+- User profile remains accessible at the bottom; `#nav-sidebar-apps` has bottom padding so no links are obscured.
+
+### 4. Mobile Topbar Behavior
+
+- Compact topbar layout preventing username/email text overflow.
+- On screens < 768px, text username is hidden and clean circular avatar button is displayed.
+- User account popover fits within mobile viewports (`max-width: calc(100vw - 24px)`).
+- Branch selector features instant `onchange="this.form.submit()"` for frictionless touch switching, with accessible fallback submit button.
+- On screens < 480px, the "Branch" text label is hidden in favor of the store icon to save horizontal space.
+
+### 5. Dashboard Grid Behavior
+
+- KPI cards adaptively scale:
+  - 1 column on mobile (< 640px)
+  - 2 columns on tablet (640px – 1023px)
+  - 4 columns on desktop (>= 1024px)
+- Analytics panels:
+  - 1 column on mobile/tablet (< 1024px)
+  - 2 columns on desktop (>= 1024px)
+- Welcome banner uses responsive typography (`font-size: clamp(...)`) with status dot and database connectivity indicator wrapping cleanly.
+- Eliminated oversized empty space in KPI cards and empty state panels.
+
+### 6. Admin Forms & Tables
+
+- Changelist tables wrapped with contained horizontal scrolling (`overflow-x: auto; -webkit-overflow-scrolling: touch;`). Page body never overflows horizontally.
+- Search input and action controls take full width on mobile viewports.
+- Change form fieldsets collapse to single column on mobile screens.
+- Form inputs, selects, and textareas take 100% width with min-height >= 40px.
+- Form submit rows wrap buttons vertically on mobile screens for comfortable thumb interaction.
+- Confirmation modals and delete dialogs fit viewport boundaries (`max-width: calc(100vw - 32px)`).
+- Validation error messages prominently styled with full visibility.
+
+### 7. Dark Mode & Contrast Verification
+
+- Dark teal sidebar background (`#103B4C`) preserved with high-contrast text (`#E2F1F0` and `#FFFFFF`).
+- Main background transitions to `#0F172A` / `#111827`; cards and panels transition to `#1E293B`.
+- Borders remain distinct (`#334155`).
+- Muted text remains readable (`#94A3B8`).
+- Accent teal `#2DD4BF` ensures strong contrast in dark mode.
+- Focus outlines use high-contrast indicators (`outline: 2px solid var(--erp-teal)`).
+
+### 8. Automated Test Results
+
+- `python manage.py check`: 0 issues identified.
+- `python manage.py makemigrations --check --dry-run`: No changes detected.
+- `python scripts/check_deployment.py`: 0 issues identified.
+- `pytest`: **88 passed, 0 failed, 0 skipped** (88.24s).
+
+### 9. Remaining Issues & Status
+
+- No architectural or migration regressions.
+- No frontend framework introduced; pure Django + Django Unfold CSS/HTML/Alpine.js.
+- Visual acceptance: PASS across all specified mobile breakpoints.

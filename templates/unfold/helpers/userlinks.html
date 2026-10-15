@@ -1,0 +1,38 @@
+{% load i18n static unfold %}
+
+{% if not is_popup %}
+    <div class="flex flex-row gap-2 sm:gap-3 items-center ml-auto erp-header-actions">
+        {% if environment %}
+            {% include "unfold/helpers/label.html" with text=environment.0 type=environment.1 %}
+        {% endif %}
+
+        {% action_list %}
+
+        {% if nav_global_side %}
+            <div class="erp-object-tools flex items-center">
+                {{ nav_global_side }}
+            </div>
+        {% endif %}
+
+        {% if request.user.is_authenticated and request.user.is_staff %}
+            <div class="erp-topbar-tools">
+                {% include "admin/components/branch_selector.html" %}
+                <details class="erp-account-menu">
+                    <summary aria-label="Account menu">
+                        <span class="erp-avatar">{{ request.user.get_short_name|slice:":1"|upper }}</span>
+                        <span class="erp-account-name">{{ request.user.get_short_name }}</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="erp-account-popover">
+                        <p class="erp-account-email">{{ request.user.email }}</p>
+                        <a href="{% url 'admin:password_change' %}">Change password</a>
+                        <form action="{% url 'admin:logout' %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit">Sign out</button>
+                        </form>
+                    </div>
+                </details>
+            </div>
+        {% endif %}
+    </div>
+{% endif %}

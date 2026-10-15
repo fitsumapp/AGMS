@@ -1,10 +1,5 @@
 {% extends "admin/base.html" %}
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
+{% load i18n %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{% if title and title != "Site administration" and title != _("Site administration") %}{{ title }} | {% endif %}{{ site_title }}{% endblock %}
 {% block branding %}{% include "unfold/helpers/site_branding.html" %}{% endblock %}
-{% block nav-global-side %}{% if request.user.is_authenticated and request.user.is_staff %}
-<div class="erp-topbar-tools">
-  {% include "admin/components/branch_selector.html" %}
-  <details class="erp-account-menu"><summary aria-label="Account menu"><span class="erp-avatar">{{ request.user.get_short_name|slice:":1"|upper }}</span><span class="erp-account-name">{{ request.user.get_short_name }}</span><span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
-    <div class="erp-account-popover"><p>{{ request.user.email }}</p><a href="{% url 'admin:password_change' %}">Change password</a><form action="{% url 'admin:logout' %}" method="post">{% csrf_token %}<button type="submit">Sign out</button></form></div>
-  </details>
-</div>{% endif %}{% endblock %}
+{% block nav-global-side %}{% endblock %}

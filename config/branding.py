@@ -44,7 +44,7 @@ def unfold_config():
     return {
         "SITE_TITLE": "apps.core.dashboard.site_name",
         "SITE_HEADER": "apps.core.dashboard.site_name",
-        "SITE_SUBHEADER": "Management workspace", "SITE_SYMBOL": "exercise",
+        "SITE_SUBHEADER": "Management Portal", "SITE_SYMBOL": "exercise",
         "SITE_LOGO": "apps.core.dashboard.site_logo",
         "SITE_URL": None, "SHOW_VIEW_ON_SITE": False,
         "COLORS": {"primary": primary_shades(), "sidebar": {"600": SIDEBAR}},

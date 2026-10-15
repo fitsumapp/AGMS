@@ -31,7 +31,9 @@ def profile_for_request(request):
 
 def site_name(request):
     profile = profile_for_request(request)
-    return profile.name if profile else settings.GYM_DISPLAY_NAME
+    if profile and profile.name:
+        return profile.name
+    return getattr(settings, "GYM_DISPLAY_NAME", "") or "Gym ERP Administration"
 
 def site_logo(request):
     profile = profile_for_request(request)
