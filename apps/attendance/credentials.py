@@ -70,6 +70,38 @@ def issue_member_credential(
 
 
 @transaction.atomic
+def reissue_member_credential(
+    member,
+    credential_type: str = MemberCredential.CredentialType.QR,
+    reissued_by=None,
+    reason: str = "Card replacement / re-print",
+) -> Tuple[MemberCredential, str]:
+    """
+    Securely reissues a new credential for a member.
+    Atomically revokes any existing active credentials of the same type with the specified reason.
+    Returns (new_credential, new_raw_token).
+    """
+    if not member:
+        raise ValidationError("Member is required to reissue a credential.")
+
+    # Explicitly revoke old credentials with custom reason and timestamp
+    old_active = MemberCredential.objects.filter(
+        member=member,
+        credential_type=credential_type,
+        status=MemberCredential.Status.ACTIVE,
+    )
+    for old in old_active:
+        revoke_credential(old, reason=reason, revoked_by=reissued_by)
+
+    return issue_member_credential(
+        member=member,
+        credential_type=credential_type,
+        issued_by=reissued_by,
+        notes=f"Reissued. Reason: {reason}",
+    )
+
+
+@transaction.atomic
 def revoke_credential(credential: MemberCredential, reason: str = "", revoked_by=None) -> MemberCredential:
     """Revoke an active credential."""
     if credential.status != MemberCredential.Status.ACTIVE:

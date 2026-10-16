@@ -135,6 +135,7 @@ class Attendance(UUIDTimeStampedModel):
     class Status(models.TextChoices):
         PRESENT = "PRESENT", "Currently Inside"
         COMPLETED = "COMPLETED", "Completed"
+        AUTO_CLOSED = "AUTO_CLOSED", "Auto-Closed (Estimated Departure)"
         VOIDED = "VOIDED", "Voided / Invalidated"
 
     member = models.ForeignKey(
@@ -166,6 +167,10 @@ class Attendance(UUIDTimeStampedModel):
         choices=CheckoutMethod.choices,
         null=True,
         blank=True,
+    )
+    is_estimated_duration = models.BooleanField(
+        default=False,
+        help_text="True if departure was closed automatically without physical checkout scan.",
     )
     recorded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -212,6 +217,18 @@ class Attendance(UUIDTimeStampedModel):
             diff = self.check_out_datetime - self.check_in_datetime
             return max(0, int(diff.total_seconds() // 60))
         return None
+
+    @property
+    def is_verified_checkout(self) -> bool:
+        return self.status == self.Status.COMPLETED and not self.is_estimated_duration and self.check_out_datetime is not None
+
+    @property
+    def verified_duration_minutes(self):
+        return self.duration_minutes if self.is_verified_checkout else None
+
+    @property
+    def estimated_duration_minutes(self):
+        return self.duration_minutes if self.is_estimated_duration else None
 
 
 class AttendanceOverride(UUIDTimeStampedModel):

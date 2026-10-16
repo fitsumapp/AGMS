@@ -57,6 +57,33 @@
     </div>
   </div>
 
+  <!-- Duration Telemetry: Verified vs Estimated -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-1.5 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-1">
+          <span class="material-symbols-outlined text-base text-emerald-600">verified</span>
+          Verified Checkout Duration
+        </div>
+        <p class="text-2xl font-bold text-gray-900">{{ metrics.avg_verified_duration_minutes }} <span class="text-sm font-normal text-gray-500">min avg</span></p>
+        <span class="text-xs text-gray-500">{{ metrics.verified_completed_count }} physically confirmed checkouts today</span>
+      </div>
+      <span class="material-symbols-outlined text-emerald-500 text-3xl">timer</span>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-amber-200 bg-amber-50/20 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-1.5 text-amber-800 text-xs font-bold uppercase tracking-wider mb-1">
+          <span class="material-symbols-outlined text-base text-amber-600">schedule</span>
+          Auto-Closed (Estimated)
+        </div>
+        <p class="text-2xl font-bold text-gray-900">{{ metrics.estimated_sessions_count }} <span class="text-sm font-normal text-gray-500">sessions</span></p>
+        <span class="text-xs text-gray-500">Departures estimated by automated background process</span>
+      </div>
+      <span class="material-symbols-outlined text-amber-500 text-3xl">auto_mode</span>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
     <!-- Peak Hours Graph -->
     <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

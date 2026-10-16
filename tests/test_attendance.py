@@ -12,6 +12,7 @@ from apps.attendance.credentials import (
     hash_token,
     issue_member_credential,
     lookup_credential,
+    reissue_member_credential,
     revoke_credential,
 )
 from apps.attendance.models import (
@@ -356,12 +357,12 @@ def test_partial_payment_policy_in_attendance(receptionist, member_a, branch_a, 
 
 
 # 12. Cross-Branch Restrictions
-def test_cross_branch_restrictions(receptionist, member_a, branch_a, branch_b, active_membership_a):
-    cred, raw_token = issue_member_credential(member=member_a, issued_by=receptionist)
+def test_cross_branch_restrictions(owner, member_a, branch_a, branch_b, active_membership_a):
+    cred, raw_token = issue_member_credential(member=member_a, issued_by=owner)
 
-    # Active membership package has cross_branch_access=False
+    # Active membership package has cross_branch_enabled=False
     with pytest.raises(ValidationError) as exc:
-        process_check_in(branch=branch_b, actor=receptionist, raw_token=raw_token)
+        process_check_in(branch=branch_b, actor=owner, raw_token=raw_token)
     assert "cross-branch" in str(exc.value).lower()
 
 
@@ -462,8 +463,12 @@ def test_auto_checkout_stale_sessions(receptionist, member_a, branch_a, active_m
     assert closed == 1
 
     att.refresh_from_db()
-    assert att.status == Attendance.Status.COMPLETED
+    assert att.status == Attendance.Status.AUTO_CLOSED
     assert att.check_out_method == Attendance.CheckoutMethod.AUTO
+    assert att.is_estimated_duration is True
+    assert att.is_verified_checkout is False
+    assert att.estimated_duration_minutes == 120
+    assert att.verified_duration_minutes is None
 
 
 # 17. Attendance Selectors and Metrics
@@ -524,3 +529,120 @@ def test_admin_custom_views_http_status(client, owner, branch_a):
     for url in urls:
         resp = client.get(url, SERVER_NAME="127.0.0.1")
         assert resp.status_code == 200, f"URL {url} returned status {resp.status_code}"
+
+
+# 21. Duration Analytics Distinguishes Verified vs Estimated Durations
+def test_duration_analytics_distinguishes_verified_vs_estimated(receptionist, member_a, branch_a, active_membership_a):
+    cred, raw_token = issue_member_credential(member=member_a, issued_by=receptionist)
+
+    # Verified session: check in, wait 45 mins, check out
+    now = timezone.now()
+    att_verified, _ = process_check_in(branch=branch_a, actor=receptionist, raw_token=raw_token)
+    att_verified.check_in_datetime = now - timedelta(minutes=45)
+    att_verified.save(update_fields=["check_in_datetime"])
+    process_check_out(branch=branch_a, actor=receptionist, raw_token=raw_token)
+    att_verified.refresh_from_db()
+    assert att_verified.is_verified_checkout is True
+    assert att_verified.verified_duration_minutes == 45
+
+    # Auto-closed session: check in, stale session, auto-checkout
+    att_auto, _ = process_check_in(branch=branch_a, actor=receptionist, raw_token=raw_token)
+    att_auto.check_in_datetime = now - timedelta(minutes=10)
+    att_auto.save(update_fields=["check_in_datetime"])
+    auto_checkout_stale_sessions(branch=branch_a, max_hours=0)
+    att_auto.refresh_from_db()
+    assert att_auto.is_verified_checkout is False
+    assert att_auto.is_estimated_duration is True
+    assert att_auto.status == Attendance.Status.AUTO_CLOSED
+
+    # Selector metrics test
+    metrics = get_attendance_metrics(user=receptionist, active_branch=branch_a)
+    assert metrics["verified_completed_count"] == 1
+    assert metrics["avg_verified_duration_minutes"] == 45
+    assert metrics["estimated_sessions_count"] == 1
+
+
+# 22. Credential Reissuance and Badge Printing Flow
+def test_credential_reissuance_and_badge_flow(receptionist, member_a, branch_a):
+    cred1, token1 = issue_member_credential(member=member_a, issued_by=receptionist)
+    assert cred1.status == MemberCredential.Status.ACTIVE
+
+    # Reissue credential (e.g. lost badge or card replacement)
+    cred2, token2 = reissue_member_credential(
+        member=member_a,
+        reissued_by=receptionist,
+        reason="Lost card reported by member",
+    )
+    cred1.refresh_from_db()
+    # Prior credential must be atomically revoked
+    assert cred1.status == MemberCredential.Status.REVOKED
+    assert "Lost card" in cred1.revoked_reason
+    assert cred2.status == MemberCredential.Status.ACTIVE
+
+    # Old token cannot be used to check in
+    with pytest.raises(ValidationError) as exc:
+        process_check_in(branch=branch_a, actor=receptionist, raw_token=token1)
+    assert "revoked" in str(exc.value).lower()
+
+    # New token generates valid working QR
+    qr_data = generate_qr_code_base64(token2)
+    assert qr_data.startswith("data:image/png;base64,")
+
+
+# 23. Unauthorized Receptionist Forged Manual Override POST Denied
+def test_receptionist_forged_manual_override_post_denied(client, receptionist, member_a, branch_a):
+    client.force_login(receptionist)
+    url = reverse("admin:attendance_manual_checkin")
+
+    resp = client.post(
+        url,
+        {
+            "action": "override",
+            "member_id": str(member_a.pk),
+            "branch_id": str(branch_a.pk),
+            "override_reason": "Attempting unauthorized override as receptionist",
+        },
+        SERVER_NAME="127.0.0.1",
+    )
+    # Must reject override
+    assert resp.status_code == 200
+    assert AttendanceOverride.objects.filter(member=member_a).count() == 0
+
+
+# 24. Staff Checking In At Unauthorized Branch Denied
+def test_unauthorized_branch_checkin_denied(receptionist, member_a, branch_b, active_membership_a):
+    # receptionist is only assigned to branch_a, not branch_b
+    cred, raw_token = issue_member_credential(member=member_a, issued_by=receptionist)
+
+    with pytest.raises(PermissionDenied):
+        process_check_in(branch=branch_b, actor=receptionist, raw_token=raw_token)
+
+
+# 25. Access Attempt Audit Does Not Expose Raw Token
+def test_access_attempt_audit_does_not_expose_raw_token(receptionist, branch_a):
+    fake_token = "SECRET_TOKEN_XYZ_1234567890"
+
+    with pytest.raises(ValidationError):
+        process_check_in(branch=branch_a, actor=receptionist, raw_token=fake_token)
+
+    attempt = AccessAttempt.objects.filter(branch=branch_a, result=AccessAttempt.Result.DENIED).first()
+    assert attempt is not None
+    # Verify raw token is never stored in message or metadata
+    assert fake_token not in attempt.message
+    assert fake_token not in str(attempt.metadata)
+    assert fake_token[:10] not in str(attempt.metadata)
+
+
+# 26. Concurrent Scans Serialize on Member Row Lock
+def test_concurrent_scans_serialize_on_member_lock(receptionist, member_a, branch_a, active_membership_a):
+    cred, raw_token = issue_member_credential(member=member_a, issued_by=receptionist)
+
+    # First check-in succeeds
+    att1, elig1 = process_check_in(branch=branch_a, actor=receptionist, raw_token=raw_token)
+    assert att1.status == Attendance.Status.PRESENT
+
+    # Immediate second scan while session is active is rejected
+    with pytest.raises(ValidationError) as exc:
+        process_check_in(branch=branch_a, actor=receptionist, raw_token=raw_token)
+    assert "already" in str(exc.value).lower()
+

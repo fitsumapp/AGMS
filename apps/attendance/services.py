@@ -27,6 +27,9 @@ def process_check_in(
     Validates QR credential (if provided), member eligibility, visit caps,
     and open-session concurrency before recording attendance.
     """
+    if actor and actor.is_authenticated and not can_checkin_members(actor, branch):
+        raise PermissionDenied("Staff member is not authorized to record attendance for this branch.")
+
     operator_str = str(actor.email if actor and actor.is_authenticated else (device.device_code if device else "SYSTEM"))
 
     # 1. Resolve member from token if raw_token is provided
@@ -40,7 +43,7 @@ def process_check_in(
                 message="Credential token is invalid or unrecognized.",
                 check_in_method=method,
                 device_or_operator=operator_str,
-                metadata={"token_prefix": raw_token[:10] if raw_token else ""},
+                metadata={"token_provided": True},
             )
             raise ValidationError("Invalid or unrecognized QR credential.")
 
@@ -79,11 +82,14 @@ def process_check_in(
     reason_code = None
 
     with transaction.atomic():
+        # Concurrency protection: serialize all scans for this member
+        from apps.members.models import Member
+        Member.objects.select_for_update().get(pk=member.pk)
+
         open_session = (
             Attendance.objects.select_for_update()
             .filter(
                 member=member,
-                branch=branch,
                 status=Attendance.Status.PRESENT,
                 check_out_datetime__isnull=True,
             )
@@ -228,16 +234,16 @@ def record_manual_override(
     now = timezone.now()
     operator_str = str(actor.email)
 
-    # Close any lingering open session for this member
+    # Close any lingering open session for this member with estimated flag
     Attendance.objects.filter(
         member=member,
-        branch=branch,
         status=Attendance.Status.PRESENT,
         check_out_datetime__isnull=True,
     ).update(
         check_out_datetime=now,
         check_out_method=Attendance.CheckoutMethod.MANUAL,
-        status=Attendance.Status.COMPLETED,
+        is_estimated_duration=True,
+        status=Attendance.Status.AUTO_CLOSED,
         notes="Closed automatically due to manual override check-in.",
     )
 
@@ -280,6 +286,8 @@ def record_manual_override(
 def auto_checkout_stale_sessions(*, branch=None, max_hours: int = 12) -> int:
     """
     Automatically close forgotten sessions older than max_hours.
+    Marks session as AUTO_CLOSED with is_estimated_duration=True.
+    Preserves actual check_in_datetime without inventing a verified physical checkout time.
     """
     cutoff = timezone.now() - timedelta(hours=max_hours)
     qs = Attendance.objects.filter(
@@ -293,11 +301,12 @@ def auto_checkout_stale_sessions(*, branch=None, max_hours: int = 12) -> int:
     count = 0
     now = timezone.now()
     for att in qs.select_for_update():
-        att.check_out_datetime = att.check_in_datetime + timedelta(hours=2)  # Estimate 2h session
+        att.check_out_datetime = att.check_in_datetime + timedelta(hours=2)  # Statistical estimated duration window
         att.check_out_method = Attendance.CheckoutMethod.AUTO
-        att.status = Attendance.Status.COMPLETED
-        att.notes = f"{att.notes}\n[Auto Checkout]: Session closed automatically after exceeding {max_hours} hours.".strip()
-        att.save(update_fields=["check_out_datetime", "check_out_method", "status", "notes", "updated_at"])
+        att.is_estimated_duration = True
+        att.status = Attendance.Status.AUTO_CLOSED
+        att.notes = f"{att.notes}\n[Auto-Closed Session]: Unconfirmed departure after exceeding {max_hours}h. Duration estimated at 2h.".strip()
+        att.save(update_fields=["check_out_datetime", "check_out_method", "is_estimated_duration", "status", "notes", "updated_at"])
         count += 1
 
     return count

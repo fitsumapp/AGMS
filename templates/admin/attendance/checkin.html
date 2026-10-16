@@ -19,31 +19,60 @@
   </div>
 
   {% if error_message %}
-  <div class="mb-6 p-4 rounded-xl border border-red-300 bg-red-50 text-red-900 flex items-start gap-3 shadow-sm animate-pulse">
-    <span class="material-symbols-outlined text-red-600 text-3xl">cancel</span>
-    <div>
-      <h3 class="text-base font-bold text-red-800">ACCESS DENIED</h3>
-      <p class="text-sm text-red-700 mt-0.5">{{ error_message }}</p>
+  <div class="mb-6 p-5 rounded-xl border border-red-300 bg-red-50 text-red-900 shadow-sm">
+    <div class="flex items-start gap-4">
+      <span class="material-symbols-outlined text-red-600 text-4xl">cancel</span>
+      <div class="flex-1">
+        <h3 class="text-lg font-bold text-red-800">ACCESS DENIED</h3>
+        <p class="text-sm text-red-700 mt-1 font-medium">{{ error_message }}</p>
+      </div>
+      {% if denied_member %}
+      <div class="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-red-200">
+        {% if denied_member.photo %}
+          <img src="{{ denied_member.photo.url }}" alt="{{ denied_member.full_name }}" class="w-14 h-14 rounded-lg object-cover border border-red-300">
+        {% else %}
+          <div class="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-200">
+            <span class="material-symbols-outlined text-2xl">person</span>
+          </div>
+        {% endif %}
+        <div>
+          <h4 class="text-sm font-bold text-gray-900">{{ denied_member.full_name }}</h4>
+          <span class="text-xs text-gray-500 font-mono">{{ denied_member.member_number }}</span>
+          <span class="block text-xs font-semibold text-red-600">Status: {{ denied_member.status }}</span>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
   {% endif %}
 
   {% if scan_result %}
-  <div class="mb-6 p-6 rounded-xl border {% if scan_result.type == 'checkout' %}border-amber-300 bg-amber-50 text-amber-900{% else %}border-emerald-300 bg-emerald-50 text-emerald-900{% endif %} shadow-md">
-    <div class="flex items-center gap-4">
-      <span class="material-symbols-outlined {% if scan_result.type == 'checkout' %}text-amber-600{% else %}text-emerald-600{% endif %} text-4xl">
-        {% if scan_result.type == 'checkout' %}logout{% else %}check_circle{% endif %}
-      </span>
-      <div class="flex-1">
-        <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded {% if scan_result.type == 'checkout' %}bg-amber-200 text-amber-800{% else %}bg-emerald-200 text-emerald-800{% endif %}">
-          {% if scan_result.type == 'checkout' %}CHECK-OUT CONFIRMED{% else %}ACCESS GRANTED{% endif %}
-        </span>
-        <h2 class="text-xl font-bold mt-1">{{ scan_result.member.full_name }} <span class="text-sm font-normal text-gray-600">({{ scan_result.member.member_number }})</span></h2>
-        <p class="text-sm font-medium mt-0.5">{{ scan_result.message }}</p>
+  <div class="mb-6 p-6 rounded-xl border {% if scan_result.type == 'checkout' %}border-amber-300 bg-amber-50/70 text-amber-900{% else %}border-emerald-300 bg-emerald-50/80 text-emerald-900{% endif %} shadow-md">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div class="flex items-center gap-4 flex-1">
+        {% if scan_result.member.photo %}
+          <img src="{{ scan_result.member.photo.url }}" alt="{{ scan_result.member.full_name }}" class="w-20 h-20 rounded-xl object-cover border-2 border-white shadow-md">
+        {% else %}
+          <div class="w-20 h-20 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-2xl border-2 border-white shadow-md">
+            {{ scan_result.member.first_name|slice:":1" }}{{ scan_result.member.last_name|slice:":1" }}
+          </div>
+        {% endif %}
+        <div class="flex-1">
+          <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded {% if scan_result.type == 'checkout' %}bg-amber-200 text-amber-800{% else %}bg-emerald-200 text-emerald-800{% endif %}">
+            {% if scan_result.type == 'checkout' %}CHECK-OUT CONFIRMED{% else %}ACCESS GRANTED{% endif %}
+          </span>
+          <h2 class="text-xl font-bold mt-1 text-gray-900">{{ scan_result.member.full_name }} <span class="text-sm font-normal text-gray-600 font-mono">({{ scan_result.member.member_number }})</span></h2>
+          <p class="text-sm font-semibold mt-0.5 {% if scan_result.type == 'checkout' %}text-amber-800{% else %}text-emerald-800{% endif %}">{{ scan_result.message }}</p>
+        </div>
       </div>
-      {% if scan_result.member.photo %}
-      <img src="{{ scan_result.member.photo.url }}" alt="{{ scan_result.member.full_name }}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm">
-      {% endif %}
+    </div>
+
+    <!-- Staff Identity Verification Instruction Banner (QR Sharing Prevention) -->
+    <div class="mt-4 p-3 bg-white/90 rounded-lg border {% if scan_result.type == 'checkout' %}border-amber-200 text-amber-900{% else %}border-teal-200 text-teal-900{% endif %} flex items-center gap-2.5 text-xs">
+      <span class="material-symbols-outlined text-base text-amber-600 shrink-0">verified_user</span>
+      <div>
+        <strong>Staff Verification Required:</strong> Confirm member identity matches the profile photo above before permitting physical entrance. Static QR credentials may be shared or duplicated if unverified by staff.
+      </div>
     </div>
 
     {% if scan_result.eligibility and scan_result.eligibility.membership %}
@@ -64,7 +93,7 @@
         <span class="text-gray-500 block">Visit Allowance</span>
         <strong class="text-gray-800">
           {% if scan_result.eligibility.membership.allowed_visits_snapshot %}
-            {{ scan_result.eligibility.membership.allowed_visits_snapshot }} Allowed
+            {{ scan_result.eligibility.membership.allowed_visits_snapshot }} Visits Cap
           {% else %}
             Unlimited
           {% endif %}

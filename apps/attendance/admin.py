@@ -14,7 +14,7 @@ from unfold.decorators import display
 from apps.accounts.roles import is_owner
 from apps.branches.services import accessible_branches, active_branch
 from apps.members.models import Member
-from .credentials import generate_qr_code_base64, issue_member_credential, revoke_credential
+from .credentials import generate_qr_code_base64, issue_member_credential, lookup_credential, reissue_member_credential, revoke_credential
 from .forms import AttendanceReportFilterForm, ManualCheckinForm, ManualOverrideForm, QRCheckinForm
 from .models import AccessAttempt, AccessDevice, Attendance, AttendanceOverride, MemberCredential
 from .permissions import can_checkin_members, can_manage_access_devices, can_override_checkin, can_view_attendance_reports
@@ -35,7 +35,7 @@ class AttendanceAdmin(ModelAdmin):
         "status_badge",
         "attendance_actions",
     )
-    list_filter = ("status", "check_in_method", "branch", "check_in_datetime")
+    list_filter = ("status", "is_estimated_duration", "check_in_method", "branch", "check_in_datetime")
     search_fields = (
         "member__member_number",
         "member__first_name",
@@ -124,7 +124,10 @@ class AttendanceAdmin(ModelAdmin):
             return "-"
         h = mins // 60
         m = mins % 60
-        return f"{h}h {m}m" if h > 0 else f"{m}m"
+        text = f"{h}h {m}m" if h > 0 else f"{m}m"
+        if obj.is_estimated_duration:
+            return format_html("<span class='text-amber-700 italic font-medium' title='Unconfirmed departure - estimated duration'>{} (Est.)</span>", text)
+        return text
 
     @display(description="Method")
     def method_badge(self, obj):
@@ -139,6 +142,8 @@ class AttendanceAdmin(ModelAdmin):
             return format_html("<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 animate-pulse'>INSIDE</span>")
         elif obj.status == Attendance.Status.COMPLETED:
             return format_html("<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700'>COMPLETED</span>")
+        elif obj.status == Attendance.Status.AUTO_CLOSED:
+            return format_html("<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300' title='Auto-closed unconfirmed departure'>AUTO-CLOSED (EST.)</span>")
         return format_html("<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>VOIDED</span>")
 
     @display(description="Actions")
@@ -187,6 +192,7 @@ class AttendanceAdmin(ModelAdmin):
 
         scan_result = None
         error_message = None
+        denied_member = None
 
         if request.method == "POST":
             raw_token = request.POST.get("raw_token", "").strip()
@@ -195,7 +201,7 @@ class AttendanceAdmin(ModelAdmin):
 
             branch = branches.filter(pk=branch_id).first() if branch_id else selected_branch
 
-            if not branch:
+            if not branch or not can_checkin_members(user, branch):
                 messages.error(request, "Invalid or unauthorized branch.")
             elif not raw_token:
                 messages.error(request, "Please scan or enter a QR token.")
@@ -228,10 +234,11 @@ class AttendanceAdmin(ModelAdmin):
                             "eligibility": elig,
                             "message": "ACCESS GRANTED — Welcome to " + branch.name,
                         }
-                except ValidationError as e:
+                except (ValidationError, PermissionDenied) as e:
                     error_message = str(e)
-                    # Lookup member if token matched to show profile even when denied
-                    credential = MemberCredential.objects.filter(token_hash__isnull=False).select_related("member").first()
+                    matched_cred = lookup_credential(raw_token)
+                    if matched_cred:
+                        denied_member = matched_cred.member
 
         context = {
             **self.admin_site.each_context(request),
@@ -239,6 +246,7 @@ class AttendanceAdmin(ModelAdmin):
             "selected_branch": selected_branch,
             "scan_result": scan_result,
             "error_message": error_message,
+            "denied_member": denied_member,
             "title": "QR Check-in & Access Control Terminal",
         }
         return render(request, "admin/attendance/checkin.html", context)
@@ -251,7 +259,7 @@ class AttendanceAdmin(ModelAdmin):
 
         checkin_result = None
         error_message = None
-        can_override = can_override_checkin(user, selected_branch)
+        can_override = can_override_checkin(user, selected_branch) if selected_branch else False
 
         if request.method == "POST":
             action = request.POST.get("action", "checkin")
@@ -262,22 +270,28 @@ class AttendanceAdmin(ModelAdmin):
             target_branch = branches.filter(pk=branch_id).first() if branch_id else selected_branch
             member = Member.objects.filter(pk=member_id).first() if member_id else None
 
-            if not target_branch or not member:
+            if not target_branch or not can_checkin_members(user, target_branch):
+                messages.error(request, "Unauthorized for the target branch.")
+            elif not member:
                 messages.error(request, "Valid member and branch must be selected.")
             elif action == "override":
-                reason = request.POST.get("override_reason", "")
-                try:
-                    att = record_manual_override(
-                        actor=user,
-                        branch=target_branch,
-                        member=member,
-                        override_reason=reason,
-                        notes=notes,
-                    )
-                    messages.success(request, f"Manual override granted for {member.full_name}.")
-                    checkin_result = {"attendance": att, "member": member, "type": "override"}
-                except (ValidationError, PermissionDenied) as e:
-                    error_message = str(e)
+                if not can_override_checkin(user, target_branch):
+                    messages.error(request, "Only Branch Managers or Gym Owners are authorized to grant manual overrides.")
+                    error_message = "Only Branch Managers or Gym Owners are authorized to grant manual overrides."
+                else:
+                    reason = request.POST.get("override_reason", "")
+                    try:
+                        att = record_manual_override(
+                            actor=user,
+                            branch=target_branch,
+                            member=member,
+                            override_reason=reason,
+                            notes=notes,
+                        )
+                        messages.success(request, f"Manual override granted for {member.full_name}.")
+                        checkin_result = {"attendance": att, "member": member, "type": "override"}
+                    except (ValidationError, PermissionDenied) as e:
+                        error_message = str(e)
             else:
                 try:
                     att, elig = process_check_in(
@@ -289,7 +303,7 @@ class AttendanceAdmin(ModelAdmin):
                     )
                     messages.success(request, f"Manual check-in recorded for {member.full_name}.")
                     checkin_result = {"attendance": att, "member": member, "eligibility": elig, "type": "manual"}
-                except ValidationError as e:
+                except (ValidationError, PermissionDenied) as e:
                     error_message = str(e)
 
         # Recent members for quick search
@@ -405,6 +419,7 @@ class MemberCredentialAdmin(ModelAdmin):
         urls = super().get_urls()
         custom = [
             path("<uuid:credential_id>/badge/", self.admin_site.admin_view(self.member_badge_view), name="attendance_member_badge"),
+            path("<uuid:credential_id>/reissue/", self.admin_site.admin_view(self.reissue_credential_view), name="attendance_credential_reissue"),
             path("<uuid:credential_id>/revoke/", self.admin_site.admin_view(self.revoke_credential_view), name="attendance_credential_revoke"),
         ]
         return custom + urls
@@ -430,31 +445,65 @@ class MemberCredentialAdmin(ModelAdmin):
     @display(description="Actions")
     def credential_actions(self, obj):
         badge_url = reverse("admin:attendance_member_badge", args=[obj.pk])
+        reissue_url = reverse("admin:attendance_credential_reissue", args=[obj.pk])
         revoke_url = reverse("admin:attendance_credential_revoke", args=[obj.pk])
 
-        html = f"<a href='{badge_url}' target='_blank' class='inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-teal-50 text-teal-700 hover:bg-teal-100 mr-2'><span class='material-symbols-outlined text-xs mr-1'>qr_code</span> Print Badge</a>"
+        html = f"<a href='{badge_url}' class='inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-teal-50 text-teal-700 hover:bg-teal-100 mr-2'><span class='material-symbols-outlined text-xs mr-1'>badge</span> View Card</a>"
         if obj.status == MemberCredential.Status.ACTIVE:
+            html += f"<a href='{reissue_url}' class='inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-sky-50 text-sky-700 hover:bg-sky-100 mr-2'><span class='material-symbols-outlined text-xs mr-1'>autorenew</span> Reissue & Print</a>"
             html += f"<a href='{revoke_url}' class='inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-red-50 text-red-700 hover:bg-red-100'><span class='material-symbols-outlined text-xs mr-1'>block</span> Revoke</a>"
         return format_html(html)
+
+    def reissue_credential_view(self, request, credential_id):
+        credential = get_object_or_404(MemberCredential, pk=credential_id)
+        if not can_checkin_members(request.user, credential.member.home_branch):
+            raise PermissionDenied("Unauthorized for this member's branch.")
+
+        if request.method == "POST":
+            reason = request.POST.get("reason", "Card replacement / re-print")
+            new_cred, raw_token = reissue_member_credential(
+                member=credential.member,
+                credential_type=credential.credential_type,
+                reissued_by=request.user,
+                reason=reason,
+            )
+            # Store in session for immediate one-time badge printing
+            request.session[f"badge_raw_token_{new_cred.pk}"] = raw_token
+            messages.success(request, f"Reissued credential for {credential.member.full_name}. Prior credential revoked.")
+            return HttpResponseRedirect(reverse("admin:attendance_member_badge", args=[new_cred.pk]))
+
+        context = {
+            **self.admin_site.each_context(request),
+            "credential": credential,
+            "member": credential.member,
+            "title": f"Reissue Credential & Print Badge — {credential.member.member_number}",
+        }
+        return render(request, "admin/attendance/reissue_credential.html", context)
 
     def member_badge_view(self, request, credential_id):
         """Render printable member ID card with QR code."""
         credential = get_object_or_404(MemberCredential, pk=credential_id)
-        # For rendering, generate QR image data URI using a testable token representation or regenerated active token
-        # Notice: The actual raw token is only returned at creation; for badge view, we re-issue or encode credential identifier
-        qr_uri = generate_qr_code_base64(f"AGMS-CRED-{credential.pk}")
+        if not can_checkin_members(request.user, credential.member.home_branch):
+            raise PermissionDenied("Unauthorized for this member's branch.")
+
+        raw_token = request.session.pop(f"badge_raw_token_{credential.pk}", None)
+        qr_uri = generate_qr_code_base64(raw_token) if raw_token else None
 
         context = {
             **self.admin_site.each_context(request),
             "credential": credential,
             "member": credential.member,
             "qr_uri": qr_uri,
+            "has_raw_token": bool(raw_token),
             "title": f"Member ID Badge — {credential.member.member_number}",
         }
         return render(request, "admin/attendance/member_qr_badge.html", context)
 
     def revoke_credential_view(self, request, credential_id):
         credential = get_object_or_404(MemberCredential, pk=credential_id)
+        if not can_checkin_members(request.user, credential.member.home_branch):
+            raise PermissionDenied("Unauthorized for this member's branch.")
+
         if request.method == "POST":
             reason = request.POST.get("reason", "Revoked via admin.")
             revoke_credential(credential, reason=reason, revoked_by=request.user)

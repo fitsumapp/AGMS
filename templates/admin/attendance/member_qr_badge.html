@@ -50,37 +50,49 @@
       opacity: 0.9;
     }
     .badge-body {
-      padding: 12px 14px;
+      padding: 10px 14px;
       display: flex;
       gap: 12px;
       align-items: center;
       flex: 1;
     }
     .badge-qr img {
-      width: 105px;
-      height: 105px;
+      width: 100px;
+      height: 100px;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
     }
     .badge-info {
       flex: 1;
+      min-width: 0;
+    }
+    .badge-photo {
+      width: 42px;
+      height: 42px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid #cbd5e1;
+      margin-bottom: 4px;
     }
     .badge-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
       color: #0f172a;
-      margin: 0 0 4px 0;
+      margin: 0 0 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .badge-number {
       font-size: 11px;
       color: #0f766e;
       font-weight: 600;
-      margin: 0 0 6px 0;
+      margin: 0 0 4px 0;
     }
     .badge-detail {
       font-size: 9px;
       color: #64748b;
-      margin: 2px 0;
+      margin: 1.5px 0;
     }
     .badge-detail strong {
       color: #334155;
@@ -97,13 +109,43 @@
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .print-btn:hover {
+      background: #115e59;
+    }
+    .reissue-box {
+      max-width: 440px;
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .reissue-btn {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 10px 20px;
+      background: #0f766e;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .reissue-btn:hover {
+      background: #115e59;
     }
     @media print {
       body {
         background: transparent;
       }
-      .print-btn {
-        display: none;
+      .print-btn, .reissue-box {
+        display: none !important;
       }
       .badge-card {
         box-shadow: none;
@@ -113,25 +155,49 @@
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">Print ID Badge</button>
+  {% if qr_uri %}
+    <button class="print-btn" onclick="window.print()">
+      🖨️ Print ID Badge
+    </button>
 
-  <div class="badge-card">
-    <div class="badge-header">
-      <h1>AGMS GYM PASS</h1>
-      <span>{{ member.home_branch.code }}</span>
-    </div>
-    <div class="badge-body">
-      <div class="badge-qr">
-        <img src="{{ qr_uri }}" alt="Member QR Code">
+    <div class="badge-card">
+      <div class="badge-header">
+        <h1>AGMS GYM PASS</h1>
+        <span>{{ member.home_branch.code }}</span>
       </div>
-      <div class="badge-info">
-        <div class="badge-name">{{ member.full_name }}</div>
-        <div class="badge-number">{{ member.member_number }}</div>
-        <div class="badge-detail">Branch: <strong>{{ member.home_branch.name }}</strong></div>
-        <div class="badge-detail">Issued: <strong>{{ credential.issued_date|date:"Y-m-d" }}</strong></div>
-        <div class="badge-detail">Status: <strong>{{ credential.status }}</strong></div>
+      <div class="badge-body">
+        <div class="badge-qr">
+          <img src="{{ qr_uri }}" alt="Member QR Code">
+        </div>
+        <div class="badge-info">
+          {% if member.photo %}
+            <img src="{{ member.photo.url }}" class="badge-photo" alt="{{ member.full_name }}">
+          {% endif %}
+          <div class="badge-name">{{ member.full_name }}</div>
+          <div class="badge-number">{{ member.member_number }}</div>
+          <div class="badge-detail">Branch: <strong>{{ member.home_branch.name }}</strong></div>
+          <div class="badge-detail">Issued: <strong>{{ credential.issued_date|date:"Y-m-d" }}</strong></div>
+          <div class="badge-detail">Status: <strong>{{ credential.status }}</strong></div>
+        </div>
       </div>
     </div>
-  </div>
+  {% else %}
+    <div class="reissue-box">
+      <div style="font-size: 36px; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 18px; margin: 0 0 8px; color: #0f172a;">Zero-Knowledge Cryptographic Storage</h2>
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 0 0 16px;">
+        This credential's secret token is stored strictly as a one-way SHA-256 hash in accordance with AGMS zero-PII security policies.
+        To print an active, functional ID card for <strong>{{ member.full_name }}</strong>, please reissue the credential. Reissuing generates a fresh cryptographically secure QR secret and atomically revokes any previous physical badge.
+      </p>
+      <a href="{% url 'admin:attendance_credential_reissue' credential.pk %}" class="reissue-btn">
+        Reissue & Print Active Badge
+      </a>
+      <div style="margin-top: 12px;">
+        <a href="{% url 'admin:attendance_membercredential_changelist' %}" style="font-size: 12px; color: #64748b; text-decoration: underline;">
+          Return to Credentials List
+        </a>
+      </div>
+    </div>
+  {% endif %}
 </body>
 </html>

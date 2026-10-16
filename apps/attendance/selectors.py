@@ -79,7 +79,27 @@ def get_attendance_metrics(user, active_branch=None) -> dict:
         m["check_in_method"]: m["total"] for m in methods_counts
     }
 
-    # Branch breakdown
+    # Duration analytics (distinguishing verified physical checkouts vs auto-closed / estimated)
+    verified_completed = today_att.filter(
+        status=Attendance.Status.COMPLETED,
+        is_estimated_duration=False,
+        check_out_datetime__isnull=False,
+    )
+    verified_durations = [
+        max(0, int((att.check_out_datetime - att.check_in_datetime).total_seconds() // 60))
+        for att in verified_completed
+        if att.check_out_datetime and att.check_in_datetime
+    ]
+    avg_verified_duration = round(sum(verified_durations) / len(verified_durations)) if verified_durations else 0
+
+    estimated_sessions = att_qs.filter(
+        Q(check_in_datetime__gte=today_start, check_in_datetime__lt=today_end)
+        | Q(check_out_datetime__gte=today_start, check_out_datetime__lt=today_end)
+    ).filter(
+        Q(status=Attendance.Status.AUTO_CLOSED) | Q(is_estimated_duration=True)
+    )
+    estimated_sessions_count = estimated_sessions.distinct().count()
+
     branch_counts = (
         today_att.values("branch__name", "branch__code")
         .annotate(total=Count("id"))
@@ -94,6 +114,9 @@ def get_attendance_metrics(user, active_branch=None) -> dict:
         "peak_hours": peak_hours_data,
         "methods_breakdown": methods_display,
         "branch_breakdown": list(branch_counts),
+        "verified_completed_count": len(verified_durations),
+        "avg_verified_duration_minutes": avg_verified_duration,
+        "estimated_sessions_count": estimated_sessions_count,
     }
 
 
