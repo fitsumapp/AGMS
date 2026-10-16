@@ -52,3 +52,41 @@ def can_view_attendance_reports(user, branch=None) -> bool:
             return can_access_branch(user, branch)
         return True
     return False
+
+
+def get_attendance_method_settings() -> dict:
+    """
+    Retrieve the effective gym-wide attendance method configuration.
+    Returns {"qr_enabled": bool, "manual_enabled": bool}.
+    """
+    from apps.core.models import GymSettings
+    settings_obj = GymSettings.objects.first()
+    if not settings_obj:
+        return {"qr_enabled": True, "manual_enabled": True}
+    return {
+        "qr_enabled": bool(settings_obj.attendance_qr_enabled),
+        "manual_enabled": bool(settings_obj.attendance_manual_enabled),
+    }
+
+
+def assert_attendance_method_enabled(method: str):
+    """
+    Enforce server-side that the requested attendance method is currently enabled.
+    Raises ValidationError if disabled.
+    """
+    from django.core.exceptions import ValidationError
+    from .models import Attendance
+
+    config = get_attendance_method_settings()
+    method_str = (method or "").upper()
+
+    if method_str in (Attendance.Method.QR, Attendance.CheckoutMethod.QR, "QR", "QR_CODE"):
+        if not config["qr_enabled"]:
+            raise ValidationError("QR Code attendance is currently disabled by gym policy.")
+    elif method_str in (Attendance.Method.MANUAL, Attendance.CheckoutMethod.MANUAL, "MANUAL", "NAME_PHONE"):
+        if not config["manual_enabled"]:
+            raise ValidationError("Manual (Name/Phone) attendance is currently disabled by gym policy.")
+    elif method_str == Attendance.Method.OVERRIDE:
+        if not config["qr_enabled"] and not config["manual_enabled"]:
+            raise ValidationError("Attendance recording is currently disabled by gym policy.")
+

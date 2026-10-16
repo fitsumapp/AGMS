@@ -79,6 +79,16 @@ def get_attendance_metrics(user, active_branch=None) -> dict:
         m["check_in_method"]: m["total"] for m in methods_counts
     }
 
+    # Explicit QR vs Manual Check-in counts
+    qr_checkins = today_att.filter(check_in_method=Attendance.Method.QR).exclude(status=Attendance.Status.VOIDED).count()
+    manual_checkins = today_att.filter(check_in_method=Attendance.Method.MANUAL).exclude(status=Attendance.Status.VOIDED).count()
+
+    # Checkouts today
+    today_checkouts_qs = att_qs.filter(check_out_datetime__gte=today_start, check_out_datetime__lt=today_end)
+    today_checkouts = today_checkouts_qs.count()
+    qr_checkouts = today_checkouts_qs.filter(check_out_method=Attendance.CheckoutMethod.QR).count()
+    manual_checkouts = today_checkouts_qs.filter(check_out_method=Attendance.CheckoutMethod.MANUAL).count()
+
     # Duration analytics (distinguishing verified physical checkouts vs auto-closed / estimated)
     verified_completed = today_att.filter(
         status=Attendance.Status.COMPLETED,
@@ -108,6 +118,11 @@ def get_attendance_metrics(user, active_branch=None) -> dict:
 
     return {
         "today_checkins": today_checkins,
+        "qr_checkins": qr_checkins,
+        "manual_checkins": manual_checkins,
+        "today_checkouts": today_checkouts,
+        "qr_checkouts": qr_checkouts,
+        "manual_checkouts": manual_checkouts,
         "currently_inside": currently_inside,
         "unique_visitors_today": unique_visitors_today,
         "denied_attempts_today": denied_attempts_today,

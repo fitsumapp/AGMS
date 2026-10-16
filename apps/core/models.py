@@ -1,5 +1,6 @@
 import uuid
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from .validators import currency_validator, phone_validator, validate_timezone, validate_logo
 
@@ -61,11 +62,41 @@ class GymSettings(UUIDTimeStampedModel, AuditFieldMixin):
     require_freeze_approval = models.BooleanField(default=True)
     cross_branch_access_mode = models.CharField(max_length=30, choices=CrossBranchAccess.choices, default=CrossBranchAccess.PACKAGE_BASED)
     early_renewal_mode = models.CharField(max_length=40, choices=EarlyRenewal.choices, default=EarlyRenewal.EXTEND_EXISTING_END_DATE)
+    attendance_qr_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Enable QR Code Attendance",
+        help_text="Allow members to check in and out using dynamic or printed QR credentials.",
+    )
+    attendance_manual_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Enable Name & Phone Attendance",
+        help_text="Allow front-desk receptionists to search members by name, phone, or member ID for check-in and check-out.",
+    )
+
     class Meta:
         verbose_name_plural = "Gym settings"
         constraints = [
             models.CheckConstraint(condition=models.Q(cross_branch_access_mode="PACKAGE_BASED"), name="valid_cross_branch_policy"),
             models.CheckConstraint(condition=models.Q(early_renewal_mode="EXTEND_EXISTING_END_DATE"), name="valid_early_renewal_policy"),
+            models.CheckConstraint(
+                condition=models.Q(attendance_qr_enabled=True) | models.Q(attendance_manual_enabled=True),
+                name="at_least_one_attendance_method_enabled",
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        if not self.attendance_qr_enabled and not self.attendance_manual_enabled:
+            raise ValidationError("At least one attendance method (QR Code or Name/Phone) must be enabled.")
+
     def __str__(self):
         return f"{self.profile} policies"
+
+
+class GymPolicy(GymSettings):
+    """Business-managed gym policies and attendance configuration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Gym policy"
+        verbose_name_plural = "Gym policies"

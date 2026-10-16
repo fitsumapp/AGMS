@@ -108,22 +108,38 @@
       </div>
     </div>
 
-    <!-- Check-in Methods & Branch Breakdown -->
+    <!-- Check-in & Check-out Methods Breakdown -->
     <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-6">
       <div>
         <h3 class="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
           <span class="material-symbols-outlined text-teal-600">pie_chart</span>
-          Check-in Methods
+          Attendance Methods
         </h3>
         <div class="space-y-2 text-xs">
-          {% for method, count in metrics.methods_breakdown.items %}
-          <div class="flex items-center justify-between p-2 rounded bg-gray-50 border border-gray-100">
-            <span class="font-medium text-gray-700">{{ method }}</span>
-            <strong class="text-teal-700 font-bold">{{ count }}</strong>
+          <div class="flex items-center justify-between p-2 rounded bg-teal-50/60 border border-teal-100">
+            <span class="font-medium text-teal-900 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-xs text-teal-600">qr_code_scanner</span> QR Check-ins
+            </span>
+            <strong class="text-teal-700 font-bold text-sm">{{ metrics.qr_checkins }}</strong>
           </div>
-          {% empty %}
-          <p class="text-xs text-gray-400 italic">No entries recorded today.</p>
-          {% endfor %}
+          <div class="flex items-center justify-between p-2 rounded bg-sky-50/60 border border-sky-100">
+            <span class="font-medium text-sky-900 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-xs text-sky-600">person_search</span> Manual Check-ins
+            </span>
+            <strong class="text-sky-700 font-bold text-sm">{{ metrics.manual_checkins }}</strong>
+          </div>
+          <div class="flex items-center justify-between p-2 rounded bg-amber-50/60 border border-amber-100">
+            <span class="font-medium text-amber-900 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-xs text-amber-600">logout</span> QR Check-outs
+            </span>
+            <strong class="text-amber-700 font-bold text-sm">{{ metrics.qr_checkouts }}</strong>
+          </div>
+          <div class="flex items-center justify-between p-2 rounded bg-indigo-50/60 border border-indigo-100">
+            <span class="font-medium text-indigo-900 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-xs text-indigo-600">badge</span> Manual Check-outs
+            </span>
+            <strong class="text-indigo-700 font-bold text-sm">{{ metrics.manual_checkouts }}</strong>
+          </div>
         </div>
       </div>
 

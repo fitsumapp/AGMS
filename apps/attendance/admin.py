@@ -3,6 +3,8 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
@@ -12,12 +14,22 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import display
 
 from apps.accounts.roles import is_owner
+from apps.billing.models import Invoice
 from apps.branches.services import accessible_branches, active_branch
 from apps.members.models import Member
+from apps.members.validators import normalize_ethiopian_phone
+from apps.memberships.models import Membership
 from .credentials import generate_qr_code_base64, issue_member_credential, lookup_credential, reissue_member_credential, revoke_credential
 from .forms import AttendanceReportFilterForm, ManualCheckinForm, ManualOverrideForm, QRCheckinForm
 from .models import AccessAttempt, AccessDevice, Attendance, AttendanceOverride, MemberCredential
-from .permissions import can_checkin_members, can_manage_access_devices, can_override_checkin, can_view_attendance_reports
+from .permissions import (
+    assert_attendance_method_enabled,
+    can_checkin_members,
+    can_manage_access_devices,
+    can_override_checkin,
+    can_view_attendance_reports,
+    get_attendance_method_settings,
+)
 from .reports import generate_attendance_csv, generate_attendance_pdf
 from .selectors import get_attendance_metrics, get_currently_inside
 from .services import process_check_in, process_check_out, record_manual_override
@@ -189,6 +201,15 @@ class AttendanceAdmin(ModelAdmin):
         user = request.user
         branches = accessible_branches(user)
         selected_branch = active_branch(request) or branches.first()
+        method_settings = get_attendance_method_settings()
+
+        if not method_settings["qr_enabled"]:
+            if request.method == "POST":
+                raise ValidationError("QR Code attendance is currently disabled by gym policy.")
+            if method_settings["manual_enabled"]:
+                messages.warning(request, "QR Code attendance is disabled. Switched to Name / Phone attendance.")
+                return HttpResponseRedirect(reverse("admin:attendance_manual_checkin"))
+            raise PermissionDenied("QR Code attendance is disabled by gym policy.")
 
         scan_result = None
         error_message = None
@@ -247,36 +268,119 @@ class AttendanceAdmin(ModelAdmin):
             "scan_result": scan_result,
             "error_message": error_message,
             "denied_member": denied_member,
+            "method_settings": method_settings,
             "title": "QR Check-in & Access Control Terminal",
         }
         return render(request, "admin/attendance/checkin.html", context)
 
     def manual_checkin_view(self, request):
-        """Front-desk manual check-in and exceptional override view."""
+        """Front-desk manual (Name/Phone) search, check-in, check-out, and override desk."""
         user = request.user
         branches = accessible_branches(user)
         selected_branch = active_branch(request) or branches.first()
+        method_settings = get_attendance_method_settings()
+
+        if not method_settings["manual_enabled"]:
+            if request.method == "POST":
+                raise ValidationError("Manual (Name/Phone) attendance is currently disabled by gym policy.")
+            if method_settings["qr_enabled"]:
+                messages.warning(request, "Name / Phone attendance is disabled. Switched to QR Code scanner.")
+                return HttpResponseRedirect(reverse("admin:attendance_qr_checkin"))
+            raise PermissionDenied("Manual (Name/Phone) attendance is disabled by gym policy.")
 
         checkin_result = None
         error_message = None
         can_override = can_override_checkin(user, selected_branch) if selected_branch else False
 
+        # Target branch resolution
+        branch_id = request.POST.get("branch_id") or request.GET.get("branch_id") or (str(selected_branch.pk) if selected_branch else None)
+        target_branch = branches.filter(pk=branch_id).first() if branch_id else selected_branch
+
+        # Search Query handling
+        search_query = request.GET.get("q", "").strip()
+        search_results = []
+        paginator = None
+        page_obj = None
+
+        base_members = Member.objects.filter(home_branch__in=branches)
+
+        if search_query:
+            query_filter = (
+                Q(member_number__icontains=search_query)
+                | Q(first_name__icontains=search_query)
+                | Q(last_name__icontains=search_query)
+                | Q(middle_name__icontains=search_query)
+                | Q(phone__icontains=search_query)
+            )
+
+            # Ethiopian phone normalization
+            try:
+                norm_phone = normalize_ethiopian_phone(search_query)
+                if norm_phone:
+                    query_filter |= Q(phone=norm_phone) | Q(alternative_phone=norm_phone)
+            except ValidationError:
+                pass
+
+            # Multi-word names
+            parts = search_query.split()
+            if len(parts) >= 2:
+                query_filter |= (Q(first_name__icontains=parts[0]) & Q(last_name__icontains=parts[-1]))
+
+            matched_qs = base_members.filter(query_filter).select_related("home_branch").distinct().order_by("first_name", "last_name")
+            paginator = Paginator(matched_qs, 10)
+            page_number = request.GET.get("page", 1)
+            try:
+                page_obj = paginator.get_page(page_number)
+            except Exception:
+                page_obj = paginator.get_page(1)
+        else:
+            # Recent members when no query is typed
+            page_obj = base_members.select_related("home_branch").order_by("-created_at")[:10]
+
+        # Selected member inspection
+        selected_member_id = request.POST.get("member_id") or request.GET.get("member_id")
+        selected_member = None
+        active_membership = None
+        last_membership = None
+        active_session = None
+        is_inside = False
+        has_unpaid_balance = False
+
+        if selected_member_id:
+            selected_member = base_members.filter(pk=selected_member_id).select_related("home_branch").first()
+            if selected_member:
+                active_membership = selected_member.memberships.filter(
+                    status=Membership.Status.ACTIVE
+                ).select_related("package", "home_branch").first()
+
+                last_membership = selected_member.memberships.select_related("package", "home_branch").order_by("-created_at").first()
+
+                active_session = Attendance.objects.filter(
+                    member=selected_member,
+                    status=Attendance.Status.PRESENT,
+                    check_out_datetime__isnull=True,
+                ).order_by("-check_in_datetime").first()
+                is_inside = (active_session is not None)
+
+                has_unpaid_balance = Invoice.objects.filter(
+                    member=selected_member,
+                    status__in=[Invoice.Status.ISSUED, Invoice.Status.PARTIALLY_PAID],
+                ).exists()
+
+        # Handle POST actions (checkin, checkout, override)
         if request.method == "POST":
             action = request.POST.get("action", "checkin")
-            member_id = request.POST.get("member_id")
-            branch_id = request.POST.get("branch_id") or (str(selected_branch.pk) if selected_branch else None)
-            notes = request.POST.get("notes", "")
-
-            target_branch = branches.filter(pk=branch_id).first() if branch_id else selected_branch
-            member = Member.objects.filter(pk=member_id).first() if member_id else None
+            confirm_identity = request.POST.get("confirm_identity") in ("1", "on", "true", "True")
+            notes = request.POST.get("notes", "").strip()
 
             if not target_branch or not can_checkin_members(user, target_branch):
-                messages.error(request, "Unauthorized for the target branch.")
-            elif not member:
-                messages.error(request, "Valid member and branch must be selected.")
+                error_message = "Unauthorized for the target branch."
+            elif not selected_member:
+                error_message = "Please select a verified member from the search results."
+            elif not confirm_identity and action in ("checkin", "checkout", "override"):
+                error_message = "Identity confirmation required: You must visually verify that the person matches the member profile before recording attendance."
             elif action == "override":
                 if not can_override_checkin(user, target_branch):
-                    messages.error(request, "Only Branch Managers or Gym Owners are authorized to grant manual overrides.")
                     error_message = "Only Branch Managers or Gym Owners are authorized to grant manual overrides."
                 else:
                     reason = request.POST.get("override_reason", "")
@@ -284,40 +388,66 @@ class AttendanceAdmin(ModelAdmin):
                         att = record_manual_override(
                             actor=user,
                             branch=target_branch,
-                            member=member,
+                            member=selected_member,
                             override_reason=reason,
                             notes=notes,
                         )
-                        messages.success(request, f"Manual override granted for {member.full_name}.")
-                        checkin_result = {"attendance": att, "member": member, "type": "override"}
+                        messages.success(request, f"Manual override granted for {selected_member.full_name}.")
+                        checkin_result = {"attendance": att, "member": selected_member, "type": "override", "message": f"OVERRIDE ACCESS GRANTED for {selected_member.full_name}."}
+                        is_inside = True
+                        active_session = att
                     except (ValidationError, PermissionDenied) as e:
                         error_message = str(e)
+            elif action == "checkout":
+                try:
+                    att = process_check_out(
+                        branch=target_branch,
+                        actor=user,
+                        member=selected_member,
+                        method=Attendance.CheckoutMethod.MANUAL,
+                        notes=notes,
+                    )
+                    messages.success(request, f"Check-out confirmed for {selected_member.full_name}.")
+                    checkin_result = {"attendance": att, "member": selected_member, "type": "checkout", "message": f"CHECK-OUT CONFIRMED for {selected_member.full_name}."}
+                    is_inside = False
+                    active_session = None
+                except (ValidationError, PermissionDenied) as e:
+                    error_message = str(e)
             else:
+                # Standard checkin
                 try:
                     att, elig = process_check_in(
                         branch=target_branch,
                         actor=user,
-                        member=member,
+                        member=selected_member,
                         method=Attendance.Method.MANUAL,
                         notes=notes,
                     )
-                    messages.success(request, f"Manual check-in recorded for {member.full_name}.")
-                    checkin_result = {"attendance": att, "member": member, "eligibility": elig, "type": "manual"}
+                    messages.success(request, f"Manual check-in recorded for {selected_member.full_name}.")
+                    checkin_result = {"attendance": att, "member": selected_member, "eligibility": elig, "type": "checkin", "message": f"ACCESS GRANTED — Welcome {selected_member.full_name}."}
+                    is_inside = True
+                    active_session = att
                 except (ValidationError, PermissionDenied) as e:
                     error_message = str(e)
-
-        # Recent members for quick search
-        recent_members = Member.objects.filter(status=Member.MemberStatus.ACTIVE).order_by("-created_at")[:15]
 
         context = {
             **self.admin_site.each_context(request),
             "branches": branches,
             "selected_branch": selected_branch,
-            "recent_members": recent_members,
+            "target_branch": target_branch,
+            "method_settings": method_settings,
+            "search_query": search_query,
+            "page_obj": page_obj,
+            "selected_member": selected_member,
+            "active_membership": active_membership,
+            "last_membership": last_membership,
+            "active_session": active_session,
+            "is_inside": is_inside,
+            "has_unpaid_balance": has_unpaid_balance,
             "checkin_result": checkin_result,
             "error_message": error_message,
             "can_override": can_override,
-            "title": "Manual Check-in & Override Desk",
+            "title": "Name & Phone Attendance Terminal",
         }
         return render(request, "admin/attendance/manual_checkin.html", context)
 

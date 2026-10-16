@@ -2,130 +2,348 @@
 {% load i18n static %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+<div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+  <!-- Page Header -->
   <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Front-Desk Manual Check-in</h1>
-      <p class="text-sm text-gray-500">Record attendance for members without physical or mobile credentials.</p>
+      <h1 class="text-2xl font-bold text-gray-900">Name & Phone Attendance Terminal</h1>
+      <p class="text-sm text-gray-500">Search members by name, phone number, or ID for verified front-desk attendance.</p>
     </div>
-    <div>
-      <a href="{% url 'admin:attendance_qr_checkin' %}" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-        <span class="material-symbols-outlined text-sm mr-1.5">qr_code_scanner</span> QR Scanner Terminal
+    <div class="flex items-center gap-2">
+      <a href="{% url 'admin:attendance_dashboard' %}" class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 shadow-sm">
+        <span class="material-symbols-outlined text-sm mr-1.5">query_stats</span> Occupancy Monitor
       </a>
     </div>
   </div>
 
+  <!-- Attendance Methods Navigation Tabs -->
+  <div class="mb-6 flex border-b border-gray-200">
+    {% if method_settings.qr_enabled %}
+    <a href="{% url 'admin:attendance_qr_checkin' %}" class="py-3 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+      <span class="material-symbols-outlined text-base">qr_code_scanner</span>
+      QR Code Scan
+    </a>
+    {% endif %}
+    {% if method_settings.manual_enabled %}
+    <a href="{% url 'admin:attendance_manual_checkin' %}" class="py-3 px-6 text-sm font-bold border-b-2 border-teal-600 text-teal-700 flex items-center gap-2 bg-teal-50/50 rounded-t-lg">
+      <span class="material-symbols-outlined text-base">person_search</span>
+      Search by Name / Phone
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Error / Denial Banner -->
   {% if error_message %}
-  <div class="mb-6 p-4 rounded-xl border border-red-300 bg-red-50 text-red-900 flex items-start gap-3 shadow-sm">
-    <span class="material-symbols-outlined text-red-600 text-3xl">error</span>
+  <div class="mb-6 p-5 rounded-xl border border-red-300 bg-red-50 text-red-900 shadow-sm flex items-start gap-4">
+    <span class="material-symbols-outlined text-red-600 text-4xl">cancel</span>
     <div class="flex-1">
-      <h3 class="text-base font-bold text-red-800">CHECK-IN REJECTED</h3>
-      <p class="text-sm text-red-700 mt-0.5">{{ error_message }}</p>
+      <h3 class="text-lg font-bold text-red-800">ATTENDANCE DENIED</h3>
+      <p class="text-sm text-red-700 mt-1 font-medium">{{ error_message }}</p>
       {% if can_override %}
-      <p class="text-xs text-amber-800 mt-2 font-medium">As a Branch Manager or Gym Owner, you can grant an authorized override below if justified.</p>
+      <p class="text-xs text-amber-800 mt-2 font-semibold">Authorized Staff: An exceptional manager override can be submitted below if justified.</p>
       {% endif %}
     </div>
   </div>
   {% endif %}
 
+  <!-- Success Banner -->
   {% if checkin_result %}
-  <div class="mb-6 p-5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-900 shadow-sm flex items-center gap-4">
-    <span class="material-symbols-outlined text-emerald-600 text-4xl">check_circle</span>
+  <div class="mb-6 p-5 rounded-xl border {% if checkin_result.type == 'checkout' %}border-amber-300 bg-amber-50/90 text-amber-900{% else %}border-emerald-300 bg-emerald-50/90 text-emerald-900{% endif %} shadow-md flex items-center gap-4">
+    <span class="material-symbols-outlined {% if checkin_result.type == 'checkout' %}text-amber-600{% else %}text-emerald-600{% endif %} text-4xl">
+      {% if checkin_result.type == 'checkout' %}logout{% else %}check_circle{% endif %}
+    </span>
     <div>
-      <h3 class="text-base font-bold text-emerald-800">SUCCESSFUL CHECK-IN</h3>
-      <p class="text-sm font-medium mt-0.5">{{ checkin_result.member.full_name }} ({{ checkin_result.member.member_number }}) checked in.</p>
+      <h3 class="text-lg font-bold {% if checkin_result.type == 'checkout' %}text-amber-900{% else %}text-emerald-900{% endif %}">
+        {{ checkin_result.message }}
+      </h3>
+      <p class="text-sm font-medium mt-0.5">
+        Member: {{ checkin_result.member.full_name }} ({{ checkin_result.member.member_number }}) · Method: Manual Front-Desk
+      </p>
     </div>
   </div>
   {% endif %}
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Regular Check-in Form -->
-    <div class="bg-white rounded-xl shadow border border-gray-200 p-6">
-      <h2 class="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <span class="material-symbols-outlined text-teal-600">person_check</span>
-        Standard Member Check-in
-      </h2>
-
-      <form method="POST" class="space-y-4">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="checkin">
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Select Member</label>
-          <select name="member_id" required class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-teal-500 focus:border-teal-500">
-            <option value="">-- Choose Member --</option>
-            {% for m in recent_members %}
-              <option value="{{ m.pk }}">{{ m.member_number }} · {{ m.full_name }} ({{ m.phone }})</option>
-            {% endfor %}
-          </select>
+  <!-- Main Search Bar -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <form method="GET" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-8">
+          <label for="search-input" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+            Search Member
+          </label>
+          <div class="relative rounded-md shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <span class="material-symbols-outlined text-lg">search</span>
+            </div>
+            <input
+              type="text"
+              name="q"
+              id="search-input"
+              value="{{ search_query }}"
+              placeholder="Search by full name, partial name, phone (e.g. 09..., 07..., +251...), or member ID..."
+              class="block w-full pl-10 pr-4 py-2.5 text-sm border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500"
+              autofocus
+            >
+          </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Branch</label>
-          <select name="branch_id" class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-teal-500 focus:border-teal-500">
+        <div class="md:col-span-2">
+          <label for="branch-select" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+            Branch
+          </label>
+          <select name="branch_id" id="branch-select" class="block w-full py-2.5 px-3 text-sm border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
             {% for b in branches %}
-              <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.code }} · {{ b.name }}</option>
+              <option value="{{ b.pk }}" {% if target_branch and target_branch.pk == b.pk %}selected{% endif %}>{{ b.code }}</option>
             {% endfor %}
           </select>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Notes (Optional)</label>
-          <input type="text" name="notes" placeholder="e.g. Card left in locker" class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-teal-500 focus:border-teal-500">
+        <div class="md:col-span-2 flex gap-2">
+          <button type="submit" class="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-sm shadow flex items-center justify-center gap-1.5 transition">
+            <span class="material-symbols-outlined text-sm">search</span> Search
+          </button>
+          {% if search_query %}
+          <a href="{% url 'admin:attendance_manual_checkin' %}" class="py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm flex items-center justify-center transition" title="Clear search">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </a>
+          {% endif %}
         </div>
+      </div>
+      <p class="text-xs text-gray-400">
+        Tip: Ethiopian phone numbers in any format (e.g. 0911223344, 0711223344, +251911223344) or partial numbers are automatically recognized.
+      </p>
+    </form>
+  </div>
 
-        <button type="submit" class="w-full py-2.5 px-4 bg-teal-600 text-white font-semibold rounded-md shadow hover:bg-teal-700 text-sm flex items-center justify-center gap-1.5">
-          <span class="material-symbols-outlined text-sm">how_to_reg</span> Record Check-in
-        </button>
-      </form>
-    </div>
-
-    <!-- Manager Manual Override Form -->
-    <div class="bg-white rounded-xl shadow border border-gray-200 p-6 {% if not can_override %}opacity-60 pointer-events-none{% endif %}">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-base font-bold text-gray-900 flex items-center gap-2">
-          <span class="material-symbols-outlined text-amber-600">admin_panel_settings</span>
-          Authorized Access Override
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Search Results / Directory Column -->
+    <div class="lg:col-span-5 space-y-4">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center justify-between">
+          <span>{% if search_query %}Search Results{% else %}Recent Members{% endif %}</span>
+          {% if page_obj %}<span class="text-teal-600 font-semibold">{{ page_obj|length }} found</span>{% endif %}
         </h2>
-        {% if not can_override %}
-        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Managers Only</span>
+
+        {% if page_obj %}
+        <div class="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
+          {% for m in page_obj %}
+          <div class="py-3 px-2 rounded-lg hover:bg-gray-50 transition flex items-center justify-between gap-3 {% if selected_member and selected_member.pk == m.pk %}bg-teal-50/80 border border-teal-200{% endif %}">
+            <div class="flex items-center gap-3 min-w-0">
+              {% if m.photo %}
+                <img src="{{ m.photo.url }}" alt="{{ m.full_name }}" class="w-10 h-10 rounded-full object-cover border border-gray-200 flex-shrink-0">
+              {% else %}
+                <div class="w-10 h-10 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-xs flex-shrink-0">
+                  {{ m.first_name|first|upper }}{{ m.last_name|first|upper }}
+                </div>
+              {% endif %}
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-gray-900 truncate">{{ m.full_name }}</p>
+                <p class="text-xs text-gray-500 font-mono truncate">{{ m.member_number }} · {{ m.phone }}</p>
+                <p class="text-[11px] text-gray-400 truncate">{{ m.home_branch.name }}</p>
+              </div>
+            </div>
+            <a
+              href="?{% if search_query %}q={{ search_query }}&{% endif %}member_id={{ m.pk }}{% if target_branch %}&branch_id={{ target_branch.pk }}{% endif %}"
+              class="px-2.5 py-1 text-xs font-semibold rounded-md border {% if selected_member and selected_member.pk == m.pk %}bg-teal-600 text-white border-teal-600{% else %}bg-white text-teal-700 border-gray-300 hover:bg-teal-50{% endif %} transition flex-shrink-0"
+            >
+              Select
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="py-8 text-center text-gray-400">
+          <span class="material-symbols-outlined text-4xl text-gray-300 mb-1">person_off</span>
+          <p class="text-sm font-medium">No matching members found.</p>
+          <p class="text-xs text-gray-400 mt-1">Try searching by partial name or phone number.</p>
+        </div>
         {% endif %}
       </div>
+    </div>
 
-      <p class="text-xs text-gray-500 mb-4">Allows exceptional entry for expired/unpaid memberships with mandatory audit reason.</p>
-
-      <form method="POST" class="space-y-4">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="override">
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Select Member</label>
-          <select name="member_id" required class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-amber-500 focus:border-amber-500">
-            <option value="">-- Choose Member --</option>
-            {% for m in recent_members %}
-              <option value="{{ m.pk }}">{{ m.member_number }} · {{ m.full_name }}</option>
-            {% endfor %}
-          </select>
+    <!-- Member Identity & Action Column -->
+    <div class="lg:col-span-7">
+      {% if selected_member %}
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <!-- Card Header with Verification Notice -->
+        <div class="bg-slate-900 text-white p-4 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-teal-400">verified_user</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-teal-300">Member Identity & Access Card</span>
+          </div>
+          {% if is_inside %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500 text-white animate-pulse">
+              <span class="w-1.5 h-1.5 rounded-full bg-white"></span> CURRENTLY INSIDE
+            </span>
+          {% else %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-700 text-gray-300">
+              NOT INSIDE
+            </span>
+          {% endif %}
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Branch</label>
-          <select name="branch_id" class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-amber-500 focus:border-amber-500">
-            {% for b in branches %}
-              <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.code }} · {{ b.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        <div class="p-6">
+          <!-- Profile & Identification Block -->
+          <div class="flex flex-col sm:flex-row items-center sm:items-start gap-5 pb-6 border-b border-gray-100">
+            {% if selected_member.photo %}
+              <img src="{{ selected_member.photo.url }}" alt="{{ selected_member.full_name }}" class="w-24 h-24 rounded-xl object-cover border-2 border-teal-500 shadow-sm flex-shrink-0">
+            {% else %}
+              <div class="w-24 h-24 rounded-xl bg-teal-50 border-2 border-teal-200 text-teal-800 font-bold flex flex-col items-center justify-center text-xl flex-shrink-0">
+                <span class="material-symbols-outlined text-3xl">account_circle</span>
+                <span class="text-xs mt-1">NO PHOTO</span>
+              </div>
+            {% endif %}
 
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Override Reason (Mandatory)</label>
-          <textarea name="override_reason" required rows="2" placeholder="e.g. VIP guest pass authorized by owner..." class="w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-amber-500 focus:border-amber-500"></textarea>
-        </div>
+            <div class="flex-1 text-center sm:text-left space-y-1">
+              <h3 class="text-xl font-bold text-gray-900">{{ selected_member.full_name }}</h3>
+              <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs font-mono text-gray-600">
+                <span class="bg-gray-100 px-2 py-0.5 rounded">ID: {{ selected_member.member_number }}</span>
+                <span class="bg-gray-100 px-2 py-0.5 rounded">TEL: {{ selected_member.phone }}</span>
+                <span class="bg-gray-100 px-2 py-0.5 rounded">BRANCH: {{ selected_member.home_branch.code }}</span>
+              </div>
+              <p class="text-xs text-gray-500 pt-1">
+                Status: <span class="font-semibold text-gray-800">{{ selected_member.get_status_display }}</span> · Joined {{ selected_member.joined_at|date:"M d, Y" }}
+              </p>
+            </div>
+          </div>
 
-        <button type="submit" class="w-full py-2.5 px-4 bg-amber-600 text-white font-semibold rounded-md shadow hover:bg-amber-700 text-sm flex items-center justify-center gap-1.5">
-          <span class="material-symbols-outlined text-sm">lock_open</span> Grant Manager Override
-        </button>
-      </form>
+          <!-- Membership & Eligibility Details -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-xs border-b border-gray-100">
+            <div>
+              <span class="text-gray-400 block uppercase tracking-wider font-semibold">Active Package</span>
+              {% if active_membership %}
+                <span class="font-bold text-gray-800 text-sm block mt-0.5">{{ active_membership.package.name }}</span>
+                <span class="text-gray-500">Expires: {{ active_membership.end_date|date:"M d, Y" }}</span>
+              {% elif last_membership %}
+                <span class="font-bold text-amber-800 text-sm block mt-0.5">{{ last_membership.package.name }} ({{ last_membership.get_status_display }})</span>
+                <span class="text-gray-500">Ended: {{ last_membership.end_date|date:"M d, Y" }}</span>
+              {% else %}
+                <span class="font-bold text-red-600 text-sm block mt-0.5">No Membership On File</span>
+              {% endif %}
+            </div>
+
+            <div>
+              <span class="text-gray-400 block uppercase tracking-wider font-semibold">Attendance Session</span>
+              {% if active_session %}
+                <span class="font-bold text-emerald-700 block mt-0.5">Checked In: {{ active_session.check_in_datetime|date:"H:i" }}</span>
+                <span class="text-gray-500">Duration so far: {{ active_session.duration_minutes|default:"0" }} mins</span>
+              {% else %}
+                <span class="font-medium text-gray-600 block mt-0.5">No open session</span>
+                <span class="text-gray-400">Ready for check-in</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Outstanding Payment Warning -->
+          {% if has_unpaid_balance %}
+          <div class="my-4 p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 flex items-center gap-2.5 text-xs font-semibold">
+            <span class="material-symbols-outlined text-amber-600 text-lg">warning</span>
+            <span>NOTICE: This member has an outstanding balance or unpaid invoice on file.</span>
+          </div>
+          {% endif %}
+
+          <!-- Execution Form -->
+          <form method="POST" class="pt-4 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="member_id" value="{{ selected_member.pk }}">
+            <input type="hidden" name="branch_id" value="{{ target_branch.pk }}">
+
+            <!-- Mandatory Visual Face / Identity Check -->
+            <div class="p-4 rounded-xl border-2 border-teal-500 bg-teal-50/70">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="confirm_identity"
+                  id="confirm_identity"
+                  value="1"
+                  required
+                  class="mt-0.5 h-4 w-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                >
+                <div class="text-xs">
+                  <span class="font-bold text-teal-950 block">IDENTITY VERIFICATION CHECK (MANDATORY)</span>
+                  <span class="text-teal-800">
+                    I visually confirm that the person presenting themselves at the desk matches the photo and profile above.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div>
+              <label for="notes-input" class="block text-xs font-semibold text-gray-700 mb-1">Staff Front-Desk Notes (Optional)</label>
+              <input
+                type="text"
+                name="notes"
+                id="notes-input"
+                placeholder="e.g. Card forgotten in bag / verified with national ID..."
+                class="w-full border-gray-300 rounded-lg shadow-sm text-sm focus:ring-teal-500 focus:border-teal-500"
+              >
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-2 flex flex-col sm:flex-row gap-3">
+              {% if is_inside %}
+                <button
+                  type="submit"
+                  name="action"
+                  value="checkout"
+                  class="flex-1 py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow text-sm flex items-center justify-center gap-2 transition"
+                >
+                  <span class="material-symbols-outlined text-base">logout</span>
+                  Confirm Check-out
+                </button>
+              {% else %}
+                <button
+                  type="submit"
+                  name="action"
+                  value="checkin"
+                  class="flex-1 py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow text-sm flex items-center justify-center gap-2 transition"
+                >
+                  <span class="material-symbols-outlined text-base">how_to_reg</span>
+                  Confirm Check-in
+                </button>
+              {% endif %}
+            </div>
+
+            <!-- Exceptional Manager Override (Collapsible) -->
+            {% if can_override %}
+            <details class="pt-2 text-xs border-t border-gray-100">
+              <summary class="font-bold text-amber-800 cursor-pointer py-1 flex items-center gap-1.5 hover:text-amber-900">
+                <span class="material-symbols-outlined text-sm">admin_panel_settings</span>
+                Exceptional Manager Access Override
+              </summary>
+              <div class="p-3 bg-amber-50/70 rounded-lg border border-amber-200 mt-2 space-y-2">
+                <label for="override-reason" class="block font-semibold text-amber-900">Mandatory Override Justification:</label>
+                <input
+                  type="text"
+                  name="override_reason"
+                  id="override-reason"
+                  placeholder="State specific reason (e.g. owner approved guest pass / payment pending bank transfer)..."
+                  class="w-full border-amber-300 rounded-md text-xs p-2 focus:ring-amber-500 focus:border-amber-500"
+                >
+                <button
+                  type="submit"
+                  name="action"
+                  value="override"
+                  class="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-semibold rounded text-xs flex items-center justify-center gap-1"
+                >
+                  Grant Exceptional Access Override
+                </button>
+              </div>
+            </details>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <!-- Empty Selection State -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center text-gray-400">
+        <span class="material-symbols-outlined text-6xl text-gray-300 mb-3">badge</span>
+        <h3 class="text-base font-bold text-gray-700">No Member Selected</h3>
+        <p class="text-xs text-gray-500 max-w-sm mx-auto mt-1">
+          Search for an active member using the search bar on the left, then click <strong>Select</strong> to verify their profile photo and record attendance.
+        </p>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

@@ -8,7 +8,7 @@ ROLE_PERMISSIONS = {
         "branches": {"add_branch", "change_branch", "view_branch", "view_branchsettings",
             "change_branchsettings", "add_userbranchaccess", "change_userbranchaccess", "view_userbranchaccess"},
         "accounts": {"add_staffaccount", "change_staffaccount", "view_staffaccount"},
-        "core": {"view_gymbranding", "change_gymbranding"},
+        "core": {"view_gymbranding", "change_gymbranding", "view_gympolicy", "change_gympolicy"},
         "members": {
             "add_member", "change_member", "view_member", "delete_member",
             "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact", "delete_memberemergencycontact",
@@ -45,6 +45,7 @@ ROLE_PERMISSIONS = {
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
+        "core": {"view_gympolicy"},
         "members": {
             "add_member", "change_member", "view_member",
             "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact", "delete_memberemergencycontact",
@@ -77,6 +78,7 @@ ROLE_PERMISSIONS = {
     },
     "Receptionist": {
         "branches": {"view_branch"},
+        "core": {"view_gympolicy"},
         "members": {
             "add_member", "change_member", "view_member",
             "add_memberemergencycontact", "change_memberemergencycontact", "view_memberemergencycontact",

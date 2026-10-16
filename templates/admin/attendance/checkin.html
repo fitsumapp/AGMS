@@ -18,6 +18,22 @@
     </div>
   </div>
 
+  <!-- Attendance Methods Navigation Tabs -->
+  <div class="mb-6 flex border-b border-gray-200">
+    {% if method_settings.qr_enabled %}
+    <a href="{% url 'admin:attendance_qr_checkin' %}" class="py-3 px-6 text-sm font-bold border-b-2 border-teal-600 text-teal-700 flex items-center gap-2 bg-teal-50/50 rounded-t-lg">
+      <span class="material-symbols-outlined text-base">qr_code_scanner</span>
+      QR Code Scan
+    </a>
+    {% endif %}
+    {% if method_settings.manual_enabled %}
+    <a href="{% url 'admin:attendance_manual_checkin' %}" class="py-3 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+      <span class="material-symbols-outlined text-base">person_search</span>
+      Search by Name / Phone
+    </a>
+    {% endif %}
+  </div>
+
   {% if error_message %}
   <div class="mb-6 p-5 rounded-xl border border-red-300 bg-red-50 text-red-900 shadow-sm">
     <div class="flex items-start gap-4">

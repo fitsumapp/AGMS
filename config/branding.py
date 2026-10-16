@@ -106,6 +106,26 @@ def can_see_overrides(request):
     from apps.accounts.roles import has_role
     return has_role(request.user, "Branch Manager")
 
+def can_see_qr_checkin(request):
+    if not can_see_attendance(request):
+        return False
+    from apps.attendance.permissions import get_attendance_method_settings
+    return get_attendance_method_settings()["qr_enabled"]
+
+def can_see_manual_checkin(request):
+    if not can_see_attendance(request):
+        return False
+    from apps.attendance.permissions import get_attendance_method_settings
+    return get_attendance_method_settings()["manual_enabled"]
+
+def can_see_gym_policies(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request) or superuser(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -141,8 +161,8 @@ def unfold_config():
                 {"title": "Operating Hours", "icon": "schedule", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings}]},
             {"title": "Attendance & Access", "items": [
                 {"title": "Attendance Dashboard", "icon": "analytics", "link": reverse_lazy("admin:attendance_dashboard"), "permission": can_see_attendance},
-                {"title": "QR Check-in", "icon": "qr_code_scanner", "link": reverse_lazy("admin:attendance_qr_checkin"), "permission": can_see_attendance},
-                {"title": "Manual Check-in", "icon": "how_to_reg", "link": reverse_lazy("admin:attendance_manual_checkin"), "permission": can_see_attendance},
+                {"title": "QR Check-in", "icon": "qr_code_scanner", "link": reverse_lazy("admin:attendance_qr_checkin"), "permission": can_see_qr_checkin},
+                {"title": "Manual Check-in", "icon": "how_to_reg", "link": reverse_lazy("admin:attendance_manual_checkin"), "permission": can_see_manual_checkin},
                 {"title": "Today's Attendance", "icon": "today", "link": format_lazy("{}?today=1", attendance_changelist), "permission": can_see_attendance},
                 {"title": "Currently Inside", "icon": "groups", "link": format_lazy("{}?status__exact=PRESENT", attendance_changelist), "permission": can_see_attendance},
                 {"title": "Attendance History", "icon": "history", "link": attendance_changelist, "permission": can_see_attendance},
@@ -182,7 +202,8 @@ def unfold_config():
                 {"title": "Technical Users", "icon": "manage_accounts", "link": reverse_lazy("admin:accounts_user_changelist"), "permission": superuser},
                 {"title": "Technical Groups", "icon": "admin_panel_settings", "link": reverse_lazy("admin:auth_group_changelist"), "permission": superuser},
                 {"title": "System Settings", "icon": "settings", "link": reverse_lazy("admin:core_gymprofile_changelist"), "permission": superuser},
-                {"title": "Access Policies", "icon": "rule", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": superuser},
+                {"title": "Technical Settings", "icon": "tune", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": superuser},
+                {"title": "Gym Policies", "icon": "rule", "link": reverse_lazy("admin:core_gympolicy_changelist"), "permission": can_see_gym_policies},
             ]},
         ]},
     }

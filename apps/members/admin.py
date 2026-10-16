@@ -162,6 +162,7 @@ class MemberAdmin(ModelAdmin):
         ("Gym Registration", {
             "fields": (
                 "member_number",
+                "qr_badge_button",
                 "home_branch",
                 "status",
                 "joined_at",
@@ -170,7 +171,7 @@ class MemberAdmin(ModelAdmin):
         }),
     )
 
-    readonly_fields = ("member_number", "joined_at")
+    readonly_fields = ("member_number", "joined_at", "qr_badge_button")
 
     def get_form(self, request, obj=None, **kwargs):
         if obj is None:
@@ -222,19 +223,58 @@ class MemberAdmin(ModelAdmin):
     @display(description="Actions")
     def member_actions(self, obj):
         links = []
-        transfer_url = reverse("admin:member-transfer-branch", args=[obj.pk])
+        badge_url = reverse("admin:member-qr-badge", args=[obj.pk])
         status_url = reverse("admin:member-change-status", args=[obj.pk])
+        transfer_url = reverse("admin:member-transfer-branch", args=[obj.pk])
+        links.append(f'<a href="{badge_url}" class="text-xs font-semibold text-teal-600 hover:underline me-2">Print QR Badge</a>')
         links.append(f'<a href="{status_url}" class="text-xs font-medium text-primary-600 hover:underline me-2">Status</a>')
         links.append(f'<a href="{transfer_url}" class="text-xs font-medium text-primary-600 hover:underline">Transfer</a>')
         return mark_safe("".join(links))
 
+    @display(description="QR Credential & Badge")
+    def qr_badge_button(self, obj):
+        if not obj.pk:
+            return "-"
+        badge_url = reverse("admin:member-qr-badge", args=[obj.pk])
+        return format_html(
+            '<a href="{}" class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-sm">'
+            '<span class="material-symbols-outlined text-sm me-1.5">qr_code_2</span> Print / View QR Badge'
+            '</a>',
+            badge_url,
+        )
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
+            path("<uuid:member_id>/badge/", self.admin_site.admin_view(self.member_badge_view), name="member-qr-badge"),
             path("<uuid:member_id>/transfer/", self.admin_site.admin_view(self.transfer_branch_view), name="member-transfer-branch"),
             path("<uuid:member_id>/status/", self.admin_site.admin_view(self.change_status_view), name="member-change-status"),
         ]
         return custom_urls + urls
+
+    def member_badge_view(self, request, member_id):
+        member = get_object_or_404(Member, pk=member_id)
+        if not is_owner(request.user) and not can_access_branch(request.user, member.home_branch):
+            raise PermissionDenied("You cannot access members from this branch.")
+
+        from apps.attendance.models import MemberCredential
+        from apps.attendance.credentials import issue_member_credential
+
+        active_cred = MemberCredential.objects.filter(
+            member=member,
+            status=MemberCredential.Status.ACTIVE,
+        ).first()
+
+        if not active_cred:
+            active_cred, raw_token = issue_member_credential(
+                member=member,
+                credential_type=MemberCredential.CredentialType.QR,
+                issued_by=request.user,
+                notes="Auto-issued on badge print request",
+            )
+            request.session[f"active_cred_token_{member.pk}"] = raw_token
+
+        return HttpResponseRedirect(reverse("admin:attendance_member_badge", args=[active_cred.pk]))
 
     def transfer_branch_view(self, request, member_id):
         member = get_object_or_404(Member, pk=member_id)
