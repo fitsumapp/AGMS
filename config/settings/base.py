@@ -16,7 +16,7 @@ INSTALLED_APPS = [
     "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig",
     "apps.branches.apps.BranchesConfig", "apps.members.apps.MembersConfig",
     "apps.memberships.apps.MembershipsConfig", "apps.billing.apps.BillingConfig",
-    "apps.attendance.apps.AttendanceConfig", "axes",
+    "apps.attendance.apps.AttendanceConfig", "apps.analytics.apps.AnalyticsConfig", "axes",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

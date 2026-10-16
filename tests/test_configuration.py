@@ -19,6 +19,7 @@ def test_all_admins_use_unfold():
         "billing.Refund", "billing.Receipt", "billing.FinancialAuditEvent",
         "attendance.Attendance", "attendance.MemberCredential", "attendance.AccessDevice",
         "attendance.AttendanceOverride", "attendance.AccessAttempt",
+        "analytics.ReportExportLog", "analytics.ReportPreset",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

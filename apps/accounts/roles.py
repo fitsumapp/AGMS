@@ -42,6 +42,10 @@ ROLE_PERMISSIONS = {
             "add_attendanceoverride", "change_attendanceoverride", "delete_attendanceoverride", "view_attendanceoverride",
             "view_accessattempt",
         },
+        "analytics": {
+            "add_reportpreset", "change_reportpreset", "delete_reportpreset", "view_reportpreset",
+            "view_reportexportlog", "delete_reportexportlog",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -75,6 +79,9 @@ ROLE_PERMISSIONS = {
             "add_attendanceoverride", "view_attendanceoverride",
             "view_accessattempt",
         },
+        "analytics": {
+            "add_reportpreset", "change_reportpreset", "view_reportpreset", "view_reportexportlog",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -104,6 +111,9 @@ ROLE_PERMISSIONS = {
             "add_attendance", "change_attendance", "view_attendance",
             "view_accessattempt",
         },
+        "analytics": {
+            "view_reportpreset",
+        },
     },
     "Accountant": {
         "branches": {"view_branch"},
@@ -125,6 +135,9 @@ ROLE_PERMISSIONS = {
         "attendance": {
             "view_attendance",
             "view_accessattempt",
+        },
+        "analytics": {
+            "add_reportpreset", "change_reportpreset", "view_reportpreset", "view_reportexportlog",
         },
     },
     "Trainer": {

@@ -1,0 +1,263 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content_title %}{{ gym_name }} — Analytics Report Center{% endblock %}
+{% block title %}Report Center | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="erp-dashboard" style="max-width: 1400px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <!-- Header Banner -->
+  <section class="erp-welcome" style="margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+    <div>
+      <p class="erp-overline" style="color: #0F766E; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;">Business Intelligence & Compliance</p>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #0F172A; margin: 0;">Report Center</h1>
+      <p style="color: #64748B; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+        Authoritative tabular reporting, live paginated auditing, and official PDF / XLSX / CSV document generation.
+      </p>
+    </div>
+
+    <!-- Quick Export Bar -->
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+      <a href="?report={{ selected_code }}&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}{% if date_range.preset == 'custom' %}&start_date={{ date_range.start_date|date:'Y-m-d' }}&end_date={{ date_range.end_date|date:'Y-m-d' }}{% endif %}&export=pdf"
+         class="erp-btn"
+         style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem; background: #DC2626; color: #FFFFFF; font-weight: 600; font-size: 0.85rem; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">picture_as_pdf</span> Export PDF
+      </a>
+      <a href="?report={{ selected_code }}&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}{% if date_range.preset == 'custom' %}&start_date={{ date_range.start_date|date:'Y-m-d' }}&end_date={{ date_range.end_date|date:'Y-m-d' }}{% endif %}&export=xlsx"
+         class="erp-btn"
+         style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem; background: #16A34A; color: #FFFFFF; font-weight: 600; font-size: 0.85rem; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">table_view</span> Export Excel (XLSX)
+      </a>
+      <a href="?report={{ selected_code }}&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}{% if date_range.preset == 'custom' %}&start_date={{ date_range.start_date|date:'Y-m-d' }}&end_date={{ date_range.end_date|date:'Y-m-d' }}{% endif %}&export=csv"
+         class="erp-btn"
+         style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem; background: #475569; color: #FFFFFF; font-weight: 600; font-size: 0.85rem; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">csv</span> Export CSV
+      </a>
+    </div>
+  </section>
+
+  <!-- Filter & Report Selection Bar -->
+  <form method="get" class="erp-panel" style="margin-bottom: 1.5rem; background: #FFFFFF; padding: 1rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; flex: 1;">
+      <!-- Report Selector Dropdown -->
+      <div>
+        <label for="report-select" style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 0.25rem;">Select Report Type</label>
+        <select id="report-select" name="report" style="padding: 0.45rem 0.75rem; font-size: 0.875rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #0F172A; font-weight: 600; min-width: 280px;">
+          {% if reports_by_category.financial %}
+          <optgroup label="Financial Reports">
+            {% for r in reports_by_category.financial %}
+            <option value="{{ r.code }}" {% if r.code == selected_code %}selected{% endif %}>{{ r.title }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+
+          {% if reports_by_category.memberships %}
+          <optgroup label="Membership Reports">
+            {% for r in reports_by_category.memberships %}
+            <option value="{{ r.code }}" {% if r.code == selected_code %}selected{% endif %}>{{ r.title }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+
+          {% if reports_by_category.attendance %}
+          <optgroup label="Attendance & Traffic Reports">
+            {% for r in reports_by_category.attendance %}
+            <option value="{{ r.code }}" {% if r.code == selected_code %}selected{% endif %}>{{ r.title }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+      </div>
+
+      <!-- Branch Scope -->
+      <div>
+        <label for="branch-select" style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 0.25rem;">Branch Scope</label>
+        <select id="branch-select" name="branch" style="padding: 0.45rem 0.75rem; font-size: 0.875rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #0F172A;">
+          {% if allow_all_branches %}
+          <option value="all" {% if not selected_branch %}selected{% endif %}>All Authorized Branches</option>
+          {% endif %}
+          {% for b in branch_options %}
+          <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Date Presets -->
+      <div>
+        <label for="date-preset-select" style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 0.25rem;">Date Filter</label>
+        <select id="date-preset-select" name="date_preset" onchange="toggleCustomDates(this.value)" style="padding: 0.45rem 0.75rem; font-size: 0.875rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #0F172A;">
+          <option value="today" {% if date_range.preset == 'today' %}selected{% endif %}>Today</option>
+          <option value="yesterday" {% if date_range.preset == 'yesterday' %}selected{% endif %}>Yesterday</option>
+          <option value="last_7_days" {% if date_range.preset == 'last_7_days' %}selected{% endif %}>Last 7 Days</option>
+          <option value="last_30_days" {% if date_range.preset == 'last_30_days' %}selected{% endif %}>Last 30 Days</option>
+          <option value="this_month" {% if date_range.preset == 'this_month' %}selected{% endif %}>This Month</option>
+          <option value="previous_month" {% if date_range.preset == 'previous_month' %}selected{% endif %}>Previous Month</option>
+          <option value="custom" {% if date_range.preset == 'custom' %}selected{% endif %}>Custom Range</option>
+        </select>
+      </div>
+
+      <!-- Custom Date Inputs -->
+      <div id="custom-dates-wrap" style="display: {% if date_range.preset == 'custom' %}inline-flex{% else %}none{% endif %}; align-items: flex-end; gap: 0.35rem;">
+        <div>
+          <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 0.25rem;">From</label>
+          <input type="date" name="start_date" value="{{ date_range.start_date|date:'Y-m-d' }}" style="padding: 0.4rem 0.5rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+        </div>
+        <div style="padding-bottom: 0.5rem; color: #94A3B8;">to</div>
+        <div>
+          <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 0.25rem;">To</label>
+          <input type="date" name="end_date" value="{{ date_range.end_date|date:'Y-m-d' }}" style="padding: 0.4rem 0.5rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.75rem; visibility: hidden; margin-bottom: 0.25rem;">Action</label>
+      <button type="submit" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1.15rem; background: #0F766E; color: #FFFFFF; font-weight: 700; font-size: 0.875rem; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">refresh</span> Generate Report
+      </button>
+    </div>
+  </form>
+
+  <!-- Active Report Metadata Card -->
+  <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px 10px 0 0; border: 1px solid #E2E8F0; border-bottom: none; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 800; color: #0F172A; margin: 0;">{{ report_def.title }}</h2>
+        <span style="font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 9999px; background: #F1F5F9; color: #475569; text-transform: uppercase;">
+          {{ report_def.category }}
+        </span>
+      </div>
+      <p style="color: #64748B; font-size: 0.85rem; margin: 0.25rem 0 0 0;">{{ report_def.description }}</p>
+    </div>
+
+    <!-- Badges / Metadata -->
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem;">
+      <span style="display: inline-flex; align-items: center; gap: 0.25rem; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 0.3rem 0.6rem; border-radius: 6px; color: #334155;">
+        <span class="material-symbols-outlined" style="font-size: 1rem; color: #0F766E;">domain</span> {{ branch_label }}
+      </span>
+      <span style="display: inline-flex; align-items: center; gap: 0.25rem; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 0.3rem 0.6rem; border-radius: 6px; color: #334155;">
+        <span class="material-symbols-outlined" style="font-size: 1rem; color: #0EA5E9;">date_range</span> {{ date_range.label }}
+      </span>
+      <span style="display: inline-flex; align-items: center; gap: 0.25rem; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 0.3rem 0.6rem; border-radius: 6px; color: #334155; font-weight: 600;">
+        <span class="material-symbols-outlined" style="font-size: 1rem; color: #64748B;">tag</span> {{ total_row_count }} total record{{ total_row_count|pluralize }}
+      </span>
+    </div>
+  </section>
+
+  <!-- Live Paginated Report Table Preview -->
+  <div class="erp-table-responsive" style="background: #FFFFFF; border: 1px solid #E2E8F0; overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+      <thead>
+        <tr style="background: #F8FAFC; border-bottom: 2px solid #E2E8F0; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em;">
+          <th style="padding: 0.75rem 1rem; width: 50px;">#</th>
+          {% for col in report_def.columns %}
+          <th style="padding: 0.75rem 1rem; {% if col.is_currency or col.align == 'right' %}text-align: right;{% endif %}">
+            {{ col.label }}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr style="border-bottom: 1px solid #F1F5F9; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor='#F8FAFC';" onmouseout="this.style.backgroundColor='';">
+          <td style="padding: 0.75rem 1rem; color: #94A3B8; font-size: 0.8rem;">
+            {{ page_obj.start_index|add:forloop.counter0 }}
+          </td>
+          {% for col in report_def.columns %}
+          <td style="padding: 0.75rem 1rem; color: #1E293B; {% if col.is_currency or col.align == 'right' %}text-align: right; font-variant-numeric: tabular-nums;{% endif %}">
+            {% if col.is_currency %}
+              {% with val=row|dictsort:col.key %}
+                <!-- Render currency with 2 decimals -->
+              {% endwith %}
+              {% for k, v in row.items %}
+                {% if k == col.key %}
+                  <span style="font-weight: 600;">{{ v|default:"0.00" }}</span>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              {% for k, v in row.items %}
+                {% if k == col.key %}
+                  <span>{{ v|default:"—" }}</span>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{{ report_def.columns|length|add:1 }}" style="padding: 3rem 1rem; text-align: center; color: #64748B;">
+            <span class="material-symbols-outlined" style="font-size: 2.5rem; color: #CBD5E1; display: block; margin-bottom: 0.5rem;">inbox</span>
+            <p style="font-size: 1rem; font-weight: 600; margin: 0;">No records found for this period and branch filter</p>
+            <p style="font-size: 0.85rem; color: #94A3B8; margin: 0.25rem 0 0 0;">Try broadening the date range or selecting all branches.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+
+      <!-- Column Totals Footer -->
+      {% if column_totals and rows %}
+      <tfoot>
+        <tr style="background: #F1F5F9; border-top: 2px solid #CBD5E1; font-weight: 800; color: #0F172A;">
+          <td style="padding: 0.75rem 1rem; text-transform: uppercase; font-size: 0.75rem; color: #475569;">Total</td>
+          {% for col in report_def.columns %}
+          <td style="padding: 0.75rem 1rem; {% if col.is_currency or col.align == 'right' %}text-align: right; font-variant-numeric: tabular-nums;{% endif %}">
+            {% if col.is_currency %}
+              {% for k, tot in column_totals.items %}
+                {% if k == col.key %}
+                  <span>ETB {{ tot|floatformat:2 }}</span>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  <!-- Pagination Controls & Footer Info -->
+  <section class="erp-panel" style="background: #FFFFFF; padding: 0.85rem 1.25rem; border-radius: 0 0 10px 10px; border: 1px solid #E2E8F0; border-top: none; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+    <div style="font-size: 0.85rem; color: #64748B;">
+      Showing <strong>{{ page_obj.start_index|default:0 }}</strong> to <strong>{{ page_obj.end_index|default:0 }}</strong> of <strong>{{ total_row_count }}</strong> records
+      (Page {{ page_obj.number }} of {{ paginator.num_pages|default:1 }})
+    </div>
+
+    {% if paginator.num_pages > 1 %}
+    <div style="display: flex; align-items: center; gap: 0.35rem;">
+      {% if page_obj.has_previous %}
+      <a href="?report={{ selected_code }}&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}{% if date_range.preset == 'custom' %}&start_date={{ date_range.start_date|date:'Y-m-d' }}&end_date={{ date_range.end_date|date:'Y-m-d' }}{% endif %}&page={{ page_obj.previous_page_number }}"
+         style="padding: 0.35rem 0.65rem; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; color: #334155; text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+        &laquo; Previous
+      </a>
+      {% endif %}
+
+      <span style="padding: 0.35rem 0.65rem; background: #0F766E; color: #FFFFFF; border-radius: 6px; font-size: 0.8rem; font-weight: 700;">
+        {{ page_obj.number }}
+      </span>
+
+      {% if page_obj.has_next %}
+      <a href="?report={{ selected_code }}&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}{% if date_range.preset == 'custom' %}&start_date={{ date_range.start_date|date:'Y-m-d' }}&end_date={{ date_range.end_date|date:'Y-m-d' }}{% endif %}&page={{ page_obj.next_page_number }}"
+         style="padding: 0.35rem 0.65rem; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; color: #334155; text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+        Next &raquo;
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+
+<script>
+function toggleCustomDates(val) {
+  var wrap = document.getElementById("custom-dates-wrap");
+  if (wrap) {
+    wrap.style.display = (val === "custom") ? "inline-flex" : "none";
+  }
+}
+</script>
+{% endblock %}

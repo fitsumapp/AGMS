@@ -126,6 +126,36 @@ def can_see_gym_policies(request):
     from apps.accounts.roles import has_role
     return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist")
 
+def can_see_analytics(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.analytics.permissions import can_view_executive_dashboard
+    return can_view_executive_dashboard(request.user)
+
+def can_see_financial_analytics(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.analytics.permissions import can_view_financial_analytics as cvfa
+    return cvfa(request.user)
+
+def can_see_membership_analytics(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.analytics.permissions import can_view_membership_analytics as cvma
+    return cvma(request.user)
+
+def can_see_attendance_analytics(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.analytics.permissions import can_view_attendance_analytics as cvaa
+    return cvaa(request.user)
+
+def can_see_reports(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.analytics.permissions import can_access_report_center
+    return can_access_report_center(request.user)
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -155,6 +185,15 @@ def unfold_config():
         "SIDEBAR": {"show_all_applications": False, "navigation": [
             {"title": "Overview", "items": [
                 {"title": "Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index")}]},
+            {"title": "Analytics & Reports", "items": [
+                {"title": "Executive Dashboard", "icon": "monitoring", "link": reverse_lazy("analytics-dashboard"), "permission": can_see_analytics},
+                {"title": "Financial Analytics", "icon": "query_stats", "link": reverse_lazy("analytics-financial"), "permission": can_see_financial_analytics},
+                {"title": "Membership Analytics", "icon": "pie_chart", "link": reverse_lazy("analytics-memberships"), "permission": can_see_membership_analytics},
+                {"title": "Attendance Analytics", "icon": "bar_chart", "link": reverse_lazy("analytics-attendance"), "permission": can_see_attendance_analytics},
+                {"title": "Report Center", "icon": "table_chart", "link": reverse_lazy("analytics-reports"), "permission": can_see_reports},
+                {"title": "Saved Presets", "icon": "bookmark", "link": reverse_lazy("admin:analytics_reportpreset_changelist"), "permission": can_see_reports},
+                {"title": "Export Audit Logs", "icon": "history_toggle_off", "link": reverse_lazy("admin:analytics_reportexportlog_changelist"), "permission": owner},
+            ]},
             {"title": "Gym Operations", "items": [
                 {"title": "Members", "icon": "group", "link": reverse_lazy("admin:members_member_changelist"), "permission": can_see_members},
                 {"title": "Branches", "icon": "location_city", "link": reverse_lazy("admin:branches_branch_changelist"), "permission": can_see_branches},

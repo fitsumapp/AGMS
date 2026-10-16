@@ -1,0 +1,187 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content_title %}{{ gym_name }} — Financial Analytics{% endblock %}
+{% block title %}Financial Analytics | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="erp-dashboard" style="max-width: 1400px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <!-- Page Header & Filter Form -->
+  <section class="erp-welcome" style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+    <div>
+      <p class="erp-overline" style="color: #0F766E; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;">Treasury & Revenue Audit</p>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #0F172A; margin: 0;">Financial Analytics</h1>
+      <p style="color: #64748B; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+        {{ date_range.label }} <span aria-hidden="true">·</span> {{ branch_label }} <span aria-hidden="true">·</span> Verified Cash-Basis Transactions Only
+      </p>
+    </div>
+
+    <!-- Filter Form -->
+    <form method="get" class="erp-filter-bar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; background: #FFFFFF; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid #E2E8F0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+      <label for="branch-select" class="sr-only">Branch</label>
+      <select id="branch-select" name="branch" style="padding: 0.4rem 0.6rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #334155;">
+        {% if allow_all_branches %}
+        <option value="all" {% if not selected_branch %}selected{% endif %}>All Authorized Branches</option>
+        {% endif %}
+        {% for b in branch_options %}
+        <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+        {% endfor %}
+      </select>
+
+      <label for="date-preset-select" class="sr-only">Date Range</label>
+      <select id="date-preset-select" name="date_preset" onchange="toggleCustomDates(this.value)" style="padding: 0.4rem 0.6rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #334155;">
+        <option value="today" {% if date_range.preset == 'today' %}selected{% endif %}>Today</option>
+        <option value="yesterday" {% if date_range.preset == 'yesterday' %}selected{% endif %}>Yesterday</option>
+        <option value="last_7_days" {% if date_range.preset == 'last_7_days' %}selected{% endif %}>Last 7 Days</option>
+        <option value="last_30_days" {% if date_range.preset == 'last_30_days' %}selected{% endif %}>Last 30 Days</option>
+        <option value="this_month" {% if date_range.preset == 'this_month' %}selected{% endif %}>This Month</option>
+        <option value="previous_month" {% if date_range.preset == 'previous_month' %}selected{% endif %}>Previous Month</option>
+        <option value="custom" {% if date_range.preset == 'custom' %}selected{% endif %}>Custom Date Range</option>
+      </select>
+
+      <span id="custom-dates-wrap" style="display: {% if date_range.preset == 'custom' %}inline-flex{% else %}none{% endif %}; align-items: center; gap: 0.35rem;">
+        <input type="date" name="start_date" value="{{ date_range.start_date|date:'Y-m-d' }}" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+        <span style="color: #94A3B8;">to</span>
+        <input type="date" name="end_date" value="{{ date_range.end_date|date:'Y-m-d' }}" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+      </span>
+
+      <button type="submit" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.85rem; background: #0F766E; color: #FFFFFF; font-weight: 600; font-size: 0.85rem; border-radius: 6px; border: none; cursor: pointer;">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">filter_alt</span> Apply Filter
+      </button>
+
+      <a href="{% url 'analytics-reports' %}?report=payment_collections&branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.85rem; background: #F1F5F9; color: #334155; font-weight: 600; font-size: 0.85rem; border-radius: 6px; text-decoration: none; border: 1px solid #E2E8F0;">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">table_chart</span> Financial Reports
+      </a>
+    </form>
+  </section>
+
+  <!-- Financial KPI Metrics Banner -->
+  <section class="erp-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Total Invoiced -->
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase;">Total Invoiced</span>
+        <span class="material-symbols-outlined" style="color: #64748B; font-size: 1.25rem;">receipt_long</span>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #0F172A; margin: 0 0 0.25rem 0;">ETB {{ financial.total_invoiced|floatformat:2 }}</p>
+      <span style="font-size: 0.775rem; color: #64748B;">Billed during selected range</span>
+    </div>
+
+    <!-- Verified Collections -->
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #0F766E; text-transform: uppercase;">Gross Collections</span>
+        <span class="material-symbols-outlined" style="color: #0F766E; font-size: 1.25rem;">payments</span>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #0F766E; margin: 0 0 0.25rem 0;">ETB {{ financial.total_collected|floatformat:2 }}</p>
+      <span style="font-size: 0.775rem; color: #0F766E; font-weight: 600;">Verified Payments Received</span>
+    </div>
+
+    <!-- Total Refunds -->
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #EF4444; text-transform: uppercase;">Refunded Outflow</span>
+        <span class="material-symbols-outlined" style="color: #EF4444; font-size: 1.25rem;">undo</span>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #EF4444; margin: 0 0 0.25rem 0;">ETB {{ financial.total_refunds|floatformat:2 }}</p>
+      <span style="font-size: 0.775rem; color: #64748B;">Reversed / Refunded</span>
+    </div>
+
+    <!-- Net Cash Collections -->
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #0F172A; text-transform: uppercase;">Net Cash Collections</span>
+        <span class="material-symbols-outlined" style="color: #0F172A; font-size: 1.25rem;">account_balance</span>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #0F172A; margin: 0 0 0.25rem 0;">ETB {{ financial.net_collections|floatformat:2 }}</p>
+      <span style="font-size: 0.775rem; color: #475569;">Gross minus refunds</span>
+    </div>
+
+    <!-- Outstanding Receivables -->
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #DC2626; text-transform: uppercase;">Outstanding Balances</span>
+        <span class="material-symbols-outlined" style="color: #DC2626; font-size: 1.25rem;">pending_actions</span>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #DC2626; margin: 0 0 0.25rem 0;">ETB {{ financial.outstanding_balance|floatformat:2 }}</p>
+      <span style="font-size: 0.775rem; color: #64748B;">{{ financial.overdue_invoice_count }} unpaid invoice{{ financial.overdue_invoice_count|pluralize }}</span>
+    </div>
+  </section>
+
+  <!-- Charts & Financial Visualizations -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+
+    <!-- Daily Trend Chart -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Daily Collections</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Daily Cash Receipts (ETB)</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">query_stats</span>
+      </div>
+      {{ chart_daily }}
+    </section>
+
+    <!-- Monthly Trend Chart -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0EA5E9; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Multi-Month History</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Monthly Collection Trend (Last 6 Months)</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0EA5E9;">stacked_bar_chart</span>
+      </div>
+      {{ chart_monthly }}
+    </section>
+
+    <!-- Payment Methods -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Tender Breakdown</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Collections by Payment Method</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">account_balance_wallet</span>
+      </div>
+      {{ chart_methods }}
+    </section>
+
+    <!-- Branch Collections -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Branch Scoping</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Collections by Branch</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">domain</span>
+      </div>
+      {{ chart_branches }}
+    </section>
+
+  </div>
+
+  <!-- Aging Summary Breakdown -->
+  <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div>
+        <p class="erp-overline" style="color: #DC2626; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Receivables Aging</p>
+        <h2 style="font-size: 1.15rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Accounts Receivable Aging Buckets</h2>
+      </div>
+      <span class="material-symbols-outlined" style="color: #DC2626;">warning</span>
+    </div>
+    {{ chart_aging }}
+  </section>
+
+</div>
+
+<script>
+function toggleCustomDates(val) {
+  var wrap = document.getElementById("custom-dates-wrap");
+  if (wrap) {
+    wrap.style.display = (val === "custom") ? "inline-flex" : "none";
+  }
+}
+</script>
+{% endblock %}

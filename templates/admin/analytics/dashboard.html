@@ -1,0 +1,225 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content_title %}{{ gym_name }} — Executive Analytics Dashboard{% endblock %}
+{% block title %}Executive Analytics Dashboard | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="erp-dashboard" style="max-width: 1400px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <!-- Page Header & Filter Form -->
+  <section class="erp-welcome" style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+    <div>
+      <p class="erp-overline" style="color: #0F766E; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;">Business Intelligence</p>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #0F172A; margin: 0;">Executive Overview</h1>
+      <p style="color: #64748B; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+        {{ date_range.label }} <span aria-hidden="true">·</span> {{ branch_label }} <span aria-hidden="true">·</span> {{ gym_timezone }}
+      </p>
+    </div>
+
+    <!-- Filter Form -->
+    <form method="get" class="erp-filter-bar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; background: #FFFFFF; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid #E2E8F0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+      <!-- Branch Selector -->
+      <label for="branch-select" class="sr-only">Branch</label>
+      <select id="branch-select" name="branch" style="padding: 0.4rem 0.6rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #334155;">
+        {% if allow_all_branches %}
+        <option value="all" {% if not selected_branch %}selected{% endif %}>All Authorized Branches</option>
+        {% endif %}
+        {% for b in branch_options %}
+        <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+        {% endfor %}
+      </select>
+
+      <!-- Date Presets -->
+      <label for="date-preset-select" class="sr-only">Date Range</label>
+      <select id="date-preset-select" name="date_preset" onchange="toggleCustomDates(this.value)" style="padding: 0.4rem 0.6rem; font-size: 0.85rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #F8FAFC; color: #334155;">
+        <option value="today" {% if date_range.preset == 'today' %}selected{% endif %}>Today</option>
+        <option value="yesterday" {% if date_range.preset == 'yesterday' %}selected{% endif %}>Yesterday</option>
+        <option value="last_7_days" {% if date_range.preset == 'last_7_days' %}selected{% endif %}>Last 7 Days</option>
+        <option value="last_30_days" {% if date_range.preset == 'last_30_days' %}selected{% endif %}>Last 30 Days</option>
+        <option value="this_month" {% if date_range.preset == 'this_month' %}selected{% endif %}>This Month</option>
+        <option value="previous_month" {% if date_range.preset == 'previous_month' %}selected{% endif %}>Previous Month</option>
+        <option value="custom" {% if date_range.preset == 'custom' %}selected{% endif %}>Custom Date Range</option>
+      </select>
+
+      <span id="custom-dates-wrap" style="display: {% if date_range.preset == 'custom' %}inline-flex{% else %}none{% endif %}; align-items: center; gap: 0.35rem;">
+        <input type="date" name="start_date" value="{{ date_range.start_date|date:'Y-m-d' }}" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+        <span style="color: #94A3B8;">to</span>
+        <input type="date" name="end_date" value="{{ date_range.end_date|date:'Y-m-d' }}" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; border: 1px solid #CBD5E1; border-radius: 6px;">
+      </span>
+
+      <button type="submit" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.85rem; background: #0F766E; color: #FFFFFF; font-weight: 600; font-size: 0.85rem; border-radius: 6px; border: none; cursor: pointer;">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">filter_alt</span> Apply Filter
+      </button>
+
+      <a href="{% url 'analytics-reports' %}?branch={{ selected_branch.pk|default:'all' }}&date_preset={{ date_range.preset }}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.85rem; background: #F1F5F9; color: #334155; font-weight: 600; font-size: 0.85rem; border-radius: 6px; text-decoration: none; border: 1px solid #E2E8F0;">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">download</span> View Reports
+      </a>
+    </form>
+  </section>
+
+  <!-- 6 Top Executive KPI Cards -->
+  <section class="erp-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    {% for card in kpi_cards %}
+    <div class="erp-panel" style="padding: 1rem; border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase;">{{ card.title }}</span>
+        <span class="material-symbols-outlined" style="color: #0F766E; font-size: 1.25rem;">{{ card.icon }}</span>
+      </div>
+      <p style="font-size: 1.45rem; font-weight: 800; color: #0F172A; margin: 0 0 0.35rem 0;">{{ card.value }}</p>
+      <div style="font-size: 0.775rem; color: #475569; display: flex; flex-direction: column; gap: 0.15rem;">
+        <span>{{ card.status }}</span>
+        {% if card.change %}
+        <span style="color: #0F766E; font-weight: 600;">{{ card.change }}</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <!-- Chart Grid (10 Responsive Charts) -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.25rem;">
+
+    <!-- Chart 1: Daily Verified Collections -->
+    {% if can_view_financial %}
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Collections (Cash Basis)</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Daily Verified Collections</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">payments</span>
+      </div>
+      {{ chart_daily_collections }}
+    </section>
+    {% endif %}
+
+    <!-- Chart 2: Monthly Collection Trend -->
+    {% if can_view_financial %}
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0EA5E9; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Multi-Month History</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Monthly Collection Trend (6 Months)</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0EA5E9;">calendar_month</span>
+      </div>
+      {{ chart_monthly_collections }}
+    </section>
+    {% endif %}
+
+    <!-- Chart 3: New Member Registrations -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #22C55E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Member Acquisition</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">New Member Registrations</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #22C55E;">person_add</span>
+      </div>
+      {{ chart_member_registrations }}
+    </section>
+
+    <!-- Chart 4: Membership Status Distribution -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Subscription Breakdown</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Membership Status Distribution</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">pie_chart</span>
+      </div>
+      {{ chart_status_distribution }}
+    </section>
+
+    <!-- Chart 5: Package Popularity -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Plan Enrollment</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Package Popularity Ranking</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">loyalty</span>
+      </div>
+      {{ chart_package_popularity }}
+    </section>
+
+    <!-- Chart 6: Attendance by Day -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #8B5CF6; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Facility Traffic</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Daily Check-in Volume</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #8B5CF6;">how_to_reg</span>
+      </div>
+      {{ chart_daily_attendance }}
+    </section>
+
+    <!-- Chart 7: Peak Attendance Hours -->
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #F59E0B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Peak Times (06:00 - 22:00)</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Peak Attendance Hours</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #F59E0B;">schedule</span>
+      </div>
+      {{ chart_peak_hours }}
+    </section>
+
+    <!-- Chart 8: Payment Method Distribution -->
+    {% if can_view_financial %}
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Tender Breakdown</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Payment Method Distribution</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">credit_card</span>
+      </div>
+      {{ chart_payment_methods }}
+    </section>
+    {% endif %}
+
+    <!-- Chart 9: Branch Performance Comparison -->
+    {% if can_view_financial %}
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #0F766E; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Multi-Branch Scoping</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Branch Collections Comparison</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #0F766E;">location_city</span>
+      </div>
+      {{ chart_branch_collections }}
+    </section>
+    {% endif %}
+
+    <!-- Chart 10: Outstanding Balances by Aging Category -->
+    {% if can_view_financial %}
+    <section class="erp-panel" style="background: #FFFFFF; padding: 1.25rem; border-radius: 10px; border: 1px solid #E2E8F0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <p class="erp-overline" style="color: #EF4444; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin: 0;">Receivables Aging</p>
+          <h2 style="font-size: 1.1rem; font-weight: 700; color: #0F172A; margin: 0.2rem 0 0 0;">Overdue Balances by Aging Category</h2>
+        </div>
+        <span class="material-symbols-outlined" style="color: #EF4444;">pending_actions</span>
+      </div>
+      {{ chart_aging_summary }}
+    </section>
+    {% endif %}
+
+  </div>
+
+</div>
+
+<script>
+function toggleCustomDates(val) {
+  var wrap = document.getElementById("custom-dates-wrap");
+  if (wrap) {
+    wrap.style.display = (val === "custom") ? "inline-flex" : "none";
+  }
+}
+</script>
+{% endblock %}

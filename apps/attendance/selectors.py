@@ -90,7 +90,10 @@ def get_attendance_metrics(user, active_branch=None) -> dict:
     manual_checkouts = today_checkouts_qs.filter(check_out_method=Attendance.CheckoutMethod.MANUAL).count()
 
     # Duration analytics (distinguishing verified physical checkouts vs auto-closed / estimated)
-    verified_completed = today_att.filter(
+    verified_completed = att_qs.filter(
+        Q(check_in_datetime__gte=today_start, check_in_datetime__lt=today_end)
+        | Q(check_out_datetime__gte=today_start, check_out_datetime__lt=today_end)
+    ).filter(
         status=Attendance.Status.COMPLETED,
         is_estimated_duration=False,
         check_out_datetime__isnull=False,
