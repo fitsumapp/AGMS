@@ -99,9 +99,20 @@ def dashboard(request, context):
             "collections_by_method": [],
         }
 
+    try:
+        from apps.attendance.selectors import get_attendance_metrics
+        att_metrics = get_attendance_metrics(request.user, active_branch=selected_b)
+    except Exception:
+        att_metrics = {
+            "today_checkins": 0,
+            "currently_inside": 0,
+            "unique_visitors_today": 0,
+            "denied_attempts_today": 0,
+        }
+
     kpi_cards = [
         {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
-        {"title": "Today's Check-ins", "icon": "how_to_reg", "value": None, "status": "Awaiting attendance module", "change": None, "permission": True},
+        {"title": "Today's Check-ins", "icon": "how_to_reg", "value": att_metrics["today_checkins"], "status": f"{att_metrics['currently_inside']} currently inside", "change": f"{att_metrics['unique_visitors_today']} unique today", "permission": True},
         {"title": "Monthly Revenue", "icon": "payments", "value": f"{b_metrics['monthly_collections']:,.2f} ETB", "status": f"Net: {b_metrics['net_collections_month']:,.2f} ETB", "change": f"Today: {b_metrics['today_collections']:,.2f} ETB", "permission": True},
         {"title": "Active Memberships", "icon": "card_membership", "value": m_metrics["active_memberships"], "status": f"{m_metrics['pending_memberships']} pending clearance", "change": f"{m_metrics['expiring_7_days']} expiring in 7d", "permission": True},
         {"title": "Expired Memberships", "icon": "event_busy", "value": m_metrics["expired_memberships"], "status": f"{m_metrics['frozen_memberships']} frozen", "change": None, "permission": True},
@@ -110,7 +121,7 @@ def dashboard(request, context):
 
     analytics_sections = [
         ("Revenue Overview", f"Verified Collections: {b_metrics['monthly_collections']:,.2f} ETB | Refunds: {b_metrics['refund_totals_month']:,.2f} ETB | Net: {b_metrics['net_collections_month']:,.2f} ETB"),
-        ("Today's Attendance", "Check-ins will appear when attendance is active."),
+        ("Today's Attendance", f"{att_metrics['today_checkins']} entries today | {att_metrics['currently_inside']} currently inside | {att_metrics['denied_attempts_today']} denied attempts"),
         ("Upcoming Classes", "Class schedules will appear in a future phase."),
         ("Membership Expiry Alerts", f"{m_metrics['expiring_7_days']} subscriptions expiring within 7 days." if m_metrics['expiring_7_days'] else "No subscriptions expiring within 7 days."),
     ]

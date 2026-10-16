@@ -1,0 +1,141 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">QR Check-in & Access Terminal</h1>
+      <p class="text-sm text-gray-500">Scan member QR credential via USB scanner or camera.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'admin:attendance_manual_checkin' %}" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+        <span class="material-symbols-outlined text-sm mr-1.5">badge</span> Manual Check-in
+      </a>
+      <a href="{% url 'admin:attendance_dashboard' %}" class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 shadow-sm">
+        <span class="material-symbols-outlined text-sm mr-1.5">query_stats</span> Occupancy Monitor
+      </a>
+    </div>
+  </div>
+
+  {% if error_message %}
+  <div class="mb-6 p-4 rounded-xl border border-red-300 bg-red-50 text-red-900 flex items-start gap-3 shadow-sm animate-pulse">
+    <span class="material-symbols-outlined text-red-600 text-3xl">cancel</span>
+    <div>
+      <h3 class="text-base font-bold text-red-800">ACCESS DENIED</h3>
+      <p class="text-sm text-red-700 mt-0.5">{{ error_message }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if scan_result %}
+  <div class="mb-6 p-6 rounded-xl border {% if scan_result.type == 'checkout' %}border-amber-300 bg-amber-50 text-amber-900{% else %}border-emerald-300 bg-emerald-50 text-emerald-900{% endif %} shadow-md">
+    <div class="flex items-center gap-4">
+      <span class="material-symbols-outlined {% if scan_result.type == 'checkout' %}text-amber-600{% else %}text-emerald-600{% endif %} text-4xl">
+        {% if scan_result.type == 'checkout' %}logout{% else %}check_circle{% endif %}
+      </span>
+      <div class="flex-1">
+        <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded {% if scan_result.type == 'checkout' %}bg-amber-200 text-amber-800{% else %}bg-emerald-200 text-emerald-800{% endif %}">
+          {% if scan_result.type == 'checkout' %}CHECK-OUT CONFIRMED{% else %}ACCESS GRANTED{% endif %}
+        </span>
+        <h2 class="text-xl font-bold mt-1">{{ scan_result.member.full_name }} <span class="text-sm font-normal text-gray-600">({{ scan_result.member.member_number }})</span></h2>
+        <p class="text-sm font-medium mt-0.5">{{ scan_result.message }}</p>
+      </div>
+      {% if scan_result.member.photo %}
+      <img src="{{ scan_result.member.photo.url }}" alt="{{ scan_result.member.full_name }}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm">
+      {% endif %}
+    </div>
+
+    {% if scan_result.eligibility and scan_result.eligibility.membership %}
+    <div class="mt-4 pt-3 border-t border-emerald-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div>
+        <span class="text-gray-500 block">Package</span>
+        <strong class="text-gray-800">{{ scan_result.eligibility.membership.package.name }}</strong>
+      </div>
+      <div>
+        <span class="text-gray-500 block">Expires On</span>
+        <strong class="text-gray-800">{{ scan_result.eligibility.membership.end_date|date:"Y-m-d" }}</strong>
+      </div>
+      <div>
+        <span class="text-gray-500 block">Home Branch</span>
+        <strong class="text-gray-800">{{ scan_result.eligibility.membership.home_branch.code }}</strong>
+      </div>
+      <div>
+        <span class="text-gray-500 block">Visit Allowance</span>
+        <strong class="text-gray-800">
+          {% if scan_result.eligibility.membership.allowed_visits_snapshot %}
+            {{ scan_result.eligibility.membership.allowed_visits_snapshot }} Allowed
+          {% else %}
+            Unlimited
+          {% endif %}
+        </strong>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Scanner Input Box -->
+  <div class="bg-white rounded-xl shadow border border-gray-200 p-6">
+    <form method="POST" id="scan-form" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="flex items-center justify-between">
+        <label for="raw_token" class="block text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-teal-600">qr_code_scanner</span>
+          USB QR Scanner or Manual Entry
+        </label>
+        <div class="flex items-center gap-3">
+          <label class="inline-flex items-center text-xs font-medium text-gray-700 cursor-pointer">
+            <input type="radio" name="action" value="checkin" checked class="text-teal-600 focus:ring-teal-500 mr-1.5"> Entry Check-in
+          </label>
+          <label class="inline-flex items-center text-xs font-medium text-gray-700 cursor-pointer">
+            <input type="radio" name="action" value="checkout" class="text-amber-600 focus:ring-amber-500 mr-1.5"> Exit Check-out
+          </label>
+        </div>
+      </div>
+
+      <div class="relative">
+        <input
+          type="text"
+          name="raw_token"
+          id="raw_token"
+          autofocus
+          autocomplete="off"
+          placeholder="Ready for barcode / QR scanner (autofocus active)..."
+          class="w-full text-base sm:text-lg font-mono px-4 py-3.5 border-2 border-teal-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-inner bg-teal-50/20"
+        />
+        <button type="submit" class="absolute right-2 top-2 bottom-2 px-5 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 text-sm flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">login</span> Submit
+        </button>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-500 gap-2 pt-2 border-t border-gray-100">
+        <div>
+          <span>Target Branch: </span>
+          <select name="branch" class="border-gray-300 rounded text-xs py-1 px-2 focus:ring-teal-500">
+            {% for b in branches %}
+              <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.code }} · {{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex items-center gap-1 text-gray-400">
+          <span class="material-symbols-outlined text-xs">keyboard</span>
+          <span>USB Scanner auto-submits on [Enter] key.</span>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Re-focus input after form submission or clicks
+  document.addEventListener("DOMContentLoaded", function() {
+    const input = document.getElementById("raw_token");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+</script>
+{% endblock %}

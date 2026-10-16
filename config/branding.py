@@ -80,6 +80,32 @@ def can_see_financial_audit(request):
     from apps.accounts.roles import has_role
     return has_role(request.user, "Accountant")
 
+def can_see_attendance(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return (has_role(request.user, "Branch Manager") or
+            has_role(request.user, "Receptionist") or
+            has_role(request.user, "Trainer"))
+
+def can_see_access_devices(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager")
+
+def can_see_overrides(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -93,6 +119,8 @@ def unfold_config():
     membership_changelist = reverse_lazy("admin:memberships_membership_changelist")
     invoice_changelist = reverse_lazy("admin:billing_invoice_changelist")
     payment_changelist = reverse_lazy("admin:billing_payment_changelist")
+    attendance_changelist = reverse_lazy("admin:attendance_attendance_changelist")
+    accessattempt_changelist = reverse_lazy("admin:attendance_accessattempt_changelist")
 
     return {
         "SITE_TITLE": "apps.core.dashboard.site_name",
@@ -111,6 +139,19 @@ def unfold_config():
                 {"title": "Members", "icon": "group", "link": reverse_lazy("admin:members_member_changelist"), "permission": can_see_members},
                 {"title": "Branches", "icon": "location_city", "link": reverse_lazy("admin:branches_branch_changelist"), "permission": can_see_branches},
                 {"title": "Operating Hours", "icon": "schedule", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings}]},
+            {"title": "Attendance & Access", "items": [
+                {"title": "Attendance Dashboard", "icon": "analytics", "link": reverse_lazy("admin:attendance_dashboard"), "permission": can_see_attendance},
+                {"title": "QR Check-in", "icon": "qr_code_scanner", "link": reverse_lazy("admin:attendance_qr_checkin"), "permission": can_see_attendance},
+                {"title": "Manual Check-in", "icon": "how_to_reg", "link": reverse_lazy("admin:attendance_manual_checkin"), "permission": can_see_attendance},
+                {"title": "Today's Attendance", "icon": "today", "link": format_lazy("{}?today=1", attendance_changelist), "permission": can_see_attendance},
+                {"title": "Currently Inside", "icon": "groups", "link": format_lazy("{}?status__exact=PRESENT", attendance_changelist), "permission": can_see_attendance},
+                {"title": "Attendance History", "icon": "history", "link": attendance_changelist, "permission": can_see_attendance},
+                {"title": "Denied Access Attempts", "icon": "block", "link": format_lazy("{}?result__exact=DENIED", accessattempt_changelist), "permission": can_see_attendance},
+                {"title": "QR Credentials", "icon": "badge", "link": reverse_lazy("admin:attendance_membercredential_changelist"), "permission": can_see_attendance},
+                {"title": "Access Devices", "icon": "meeting_room", "link": reverse_lazy("admin:attendance_accessdevice_changelist"), "permission": can_see_access_devices},
+                {"title": "Manual Overrides", "icon": "admin_panel_settings", "link": reverse_lazy("admin:attendance_attendanceoverride_changelist"), "permission": can_see_overrides},
+                {"title": "Attendance Reports", "icon": "summarize", "link": reverse_lazy("admin:attendance_reports"), "permission": can_see_attendance},
+            ]},
             {"title": "Membership Management", "items": [
                 {"title": "Membership Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index"), "permission": can_see_memberships},
                 {"title": "Membership Packages", "icon": "card_membership", "link": reverse_lazy("admin:memberships_membershippackage_changelist"), "permission": can_see_memberships},

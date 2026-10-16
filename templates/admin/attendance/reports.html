@@ -1,0 +1,99 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Attendance Reports & Exports</h1>
+      <p class="text-sm text-gray-500">Filter, audit, and export facility check-in and checkout records.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="?{{ request.GET.urlencode }}&export=csv" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+        <span class="material-symbols-outlined text-sm mr-1.5">table_view</span> Export CSV
+      </a>
+      <a href="?{{ request.GET.urlencode }}&export=pdf" target="_blank" class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 shadow-sm">
+        <span class="material-symbols-outlined text-sm mr-1.5">picture_as_pdf</span> Export PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter Form -->
+  <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm mb-6">
+    <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">From Date</label>
+        {{ form.start_date }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">To Date</label>
+        {{ form.end_date }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Branch</label>
+        {{ form.branch }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Method</label>
+        {{ form.method }}
+      </div>
+      <div>
+        <button type="submit" class="w-full py-2 px-4 bg-teal-600 text-white font-medium rounded-md text-sm hover:bg-teal-700 shadow-sm flex items-center justify-center gap-1">
+          <span class="material-symbols-outlined text-sm">filter_alt</span> Apply Filter
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Results Table -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-4 border-b border-gray-200 flex items-center justify-between text-xs text-gray-500">
+      <span>Showing latest records (Total matches: <strong>{{ total_count }}</strong>)</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+          <tr>
+            <th class="px-6 py-3 text-left">Member</th>
+            <th class="px-6 py-3 text-left">Branch</th>
+            <th class="px-6 py-3 text-left">Check-in</th>
+            <th class="px-6 py-3 text-left">Check-out</th>
+            <th class="px-6 py-3 text-left">Duration</th>
+            <th class="px-6 py-3 text-left">Method</th>
+            <th class="px-6 py-3 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 bg-white">
+          {% for r in records %}
+          <tr class="hover:bg-gray-50/80">
+            <td class="px-6 py-3 whitespace-nowrap">
+              <span class="font-semibold text-gray-900 block">{{ r.member.full_name }}</span>
+              <span class="text-xs text-gray-500">{{ r.member.member_number }}</span>
+            </td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-700">{{ r.branch.code }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-600">{{ r.check_in_datetime|date:"Y-m-d H:i" }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-600">{{ r.check_out_datetime|date:"H:i"|default:"-" }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-600">
+              {% if r.duration_minutes %}{{ r.duration_minutes }}m{% else %}-{% endif %}
+            </td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-700">{{ r.get_check_in_method_display }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs">
+              <span class="px-2 py-0.5 rounded text-[11px] font-semibold {% if r.status == 'PRESENT' %}bg-green-100 text-green-800{% elif r.status == 'COMPLETED' %}bg-gray-100 text-gray-700{% else %}bg-red-100 text-red-800{% endif %}">
+                {{ r.get_status_display }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-6 py-8 text-center text-gray-400 text-xs italic">
+              No attendance records found for this filter.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

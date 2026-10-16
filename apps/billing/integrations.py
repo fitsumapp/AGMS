@@ -47,7 +47,7 @@ class MembershipBillingIntegration:
             member=membership.member,
             branch=membership.home_branch,
             items=items,
-            due_date=membership.start_date,
+            due_date=max(membership.start_date, timezone.localdate()),
             membership=membership,
             issue_now=True,
             notes=f"Auto-generated for membership {membership.membership_number}",

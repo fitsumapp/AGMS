@@ -149,7 +149,25 @@ def can_access_branch(member, branch, at_datetime=None) -> AccessResult:
             membership=m,
         )
 
-    # 5. Branch Eligibility & Cross-Branch Access Policy
+    # 5. Visit Allowance Check (if limited visits snapshot is set)
+    if m.allowed_visits_snapshot is not None:
+        try:
+            from apps.attendance.models import Attendance
+            consumed = Attendance.objects.filter(
+                membership=m,
+                status__in=[Attendance.Status.PRESENT, Attendance.Status.COMPLETED],
+            ).count()
+            if consumed >= m.allowed_visits_snapshot:
+                return AccessResult(
+                    False,
+                    AccessResult.CODE_VISIT_LIMIT_EXCEEDED,
+                    f"Visit limit of {m.allowed_visits_snapshot} reached for membership {m.membership_number} ({consumed} used).",
+                    membership=m,
+                )
+        except Exception:
+            pass
+
+    # 6. Branch Eligibility & Cross-Branch Access Policy
     is_home_branch = (m.home_branch_id == branch.pk)
     if is_home_branch:
         return AccessResult(True, AccessResult.CODE_ALLOWED, "Access granted for home branch.", membership=m)

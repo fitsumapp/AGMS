@@ -1,0 +1,175 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Attendance & Occupancy Dashboard</h1>
+      <p class="text-sm text-gray-500">Live facility telemetry, peak hours, and check-in methods.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'admin:attendance_qr_checkin' %}" class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 shadow-sm">
+        <span class="material-symbols-outlined text-sm mr-1.5">qr_code_scanner</span> Open QR Scanner
+      </a>
+      <a href="{% url 'admin:attendance_reports' %}" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+        <span class="material-symbols-outlined text-sm mr-1.5">download</span> Export Reports
+      </a>
+    </div>
+  </div>
+
+  <!-- Key Metric Cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between text-gray-500 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider">Today's Check-ins</span>
+        <span class="material-symbols-outlined text-teal-600">how_to_reg</span>
+      </div>
+      <p class="text-3xl font-extrabold text-gray-900">{{ metrics.today_checkins }}</p>
+      <span class="text-xs text-gray-500 mt-1 block">Total entries today</span>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl border border-teal-200 bg-teal-50/30 shadow-sm">
+      <div class="flex items-center justify-between text-teal-700 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider">Currently Inside</span>
+        <span class="material-symbols-outlined text-teal-700 animate-pulse">groups</span>
+      </div>
+      <p class="text-3xl font-extrabold text-teal-900">{{ metrics.currently_inside }}</p>
+      <span class="text-xs text-teal-700 mt-1 block">Active open sessions</span>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between text-gray-500 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider">Unique Visitors</span>
+        <span class="material-symbols-outlined text-sky-600">person</span>
+      </div>
+      <p class="text-3xl font-extrabold text-gray-900">{{ metrics.unique_visitors_today }}</p>
+      <span class="text-xs text-gray-500 mt-1 block">Distinct members</span>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between text-gray-500 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider">Denied Attempts</span>
+        <span class="material-symbols-outlined text-red-500">block</span>
+      </div>
+      <p class="text-3xl font-extrabold text-gray-900">{{ metrics.denied_attempts_today }}</p>
+      <span class="text-xs text-red-600 mt-1 block">Rejections / expired today</span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <!-- Peak Hours Graph -->
+    <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+      <h3 class="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600">bar_chart</span>
+        Peak Operating Hours Today
+      </h3>
+      <p class="text-xs text-gray-500 mb-6">Distribution of check-in events by hour of the day.</p>
+
+      <div class="flex items-end gap-2 h-44 border-b border-gray-200 pb-2">
+        {% for item in metrics.peak_hours %}
+        <div class="flex-1 flex flex-col items-center gap-1 group relative">
+          <div class="w-full bg-teal-500 hover:bg-teal-600 rounded-t transition-all" style="height: {% if item.count > 0 %}{{ item.count|floatformat:0 }}0px; min-height: 12px;{% else %}4px; opacity: 0.3;{% endif %}"></div>
+          <span class="text-[10px] text-gray-500 transform -rotate-45 origin-top-left mt-2">{{ item.hour }}</span>
+          {% if item.count > 0 %}
+          <div class="absolute -top-7 hidden group-hover:block bg-gray-900 text-white text-[10px] py-0.5 px-1.5 rounded shadow">
+            {{ item.count }} entries
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Check-in Methods & Branch Breakdown -->
+    <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-6">
+      <div>
+        <h3 class="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-teal-600">pie_chart</span>
+          Check-in Methods
+        </h3>
+        <div class="space-y-2 text-xs">
+          {% for method, count in metrics.methods_breakdown.items %}
+          <div class="flex items-center justify-between p-2 rounded bg-gray-50 border border-gray-100">
+            <span class="font-medium text-gray-700">{{ method }}</span>
+            <strong class="text-teal-700 font-bold">{{ count }}</strong>
+          </div>
+          {% empty %}
+          <p class="text-xs text-gray-400 italic">No entries recorded today.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if metrics.branch_breakdown %}
+      <div>
+        <h3 class="text-base font-bold text-gray-900 mb-3">Branch Distribution</h3>
+        <div class="space-y-2 text-xs">
+          {% for b in metrics.branch_breakdown %}
+          <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+            <span class="text-gray-700">{{ b.branch__code }} · {{ b.branch__name }}</span>
+            <strong class="text-gray-900 font-bold">{{ b.total }}</strong>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Currently Inside Table -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <h3 class="text-base font-bold text-gray-900">Members Currently Inside</h3>
+        <p class="text-xs text-gray-500">Live active sessions requiring check-out upon exit.</p>
+      </div>
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-800">
+        {{ currently_inside|length }} Inside
+      </span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+          <tr>
+            <th class="px-6 py-3 text-left">Member</th>
+            <th class="px-6 py-3 text-left">Branch</th>
+            <th class="px-6 py-3 text-left">Checked In</th>
+            <th class="px-6 py-3 text-left">Package</th>
+            <th class="px-6 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 bg-white">
+          {% for att in currently_inside %}
+          <tr class="hover:bg-gray-50/80">
+            <td class="px-6 py-3 whitespace-nowrap">
+              <a href="{% url 'admin:members_member_change' att.member.pk %}" class="font-semibold text-teal-600 hover:underline">
+                {{ att.member.full_name }}
+              </a>
+              <span class="text-xs text-gray-500 block">{{ att.member.member_number }}</span>
+            </td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-700">{{ att.branch.code }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-600">{{ att.check_in_datetime|date:"H:i" }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-xs text-gray-600">{{ att.membership.package.name|default:"-" }}</td>
+            <td class="px-6 py-3 whitespace-nowrap text-right">
+              <form method="POST" action="{% url 'admin:attendance_checkout_action' att.pk %}" style="display:inline;" onsubmit="return confirm('Check out {{ att.member.full_name }}?');">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200">
+                  <span class="material-symbols-outlined text-xs mr-1">logout</span> Check Out
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-8 text-center text-gray-400 text-xs italic">
+              No members currently checked in.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

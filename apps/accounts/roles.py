@@ -35,6 +35,13 @@ ROLE_PERMISSIONS = {
             "add_paymentadjustment", "change_paymentadjustment", "delete_paymentadjustment", "view_paymentadjustment",
             "view_financialauditevent",
         },
+        "attendance": {
+            "add_membercredential", "change_membercredential", "delete_membercredential", "view_membercredential",
+            "add_accessdevice", "change_accessdevice", "delete_accessdevice", "view_accessdevice",
+            "add_attendance", "change_attendance", "delete_attendance", "view_attendance",
+            "add_attendanceoverride", "change_attendanceoverride", "delete_attendanceoverride", "view_attendanceoverride",
+            "view_accessattempt",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -60,6 +67,13 @@ ROLE_PERMISSIONS = {
             "add_refund", "view_refund",
             "view_receipt",
         },
+        "attendance": {
+            "add_membercredential", "change_membercredential", "view_membercredential",
+            "add_accessdevice", "change_accessdevice", "view_accessdevice",
+            "add_attendance", "change_attendance", "view_attendance",
+            "add_attendanceoverride", "view_attendanceoverride",
+            "view_accessattempt",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -83,6 +97,11 @@ ROLE_PERMISSIONS = {
             "view_paymentmethod",
             "view_receipt",
         },
+        "attendance": {
+            "add_membercredential", "view_membercredential",
+            "add_attendance", "change_attendance", "view_attendance",
+            "view_accessattempt",
+        },
     },
     "Accountant": {
         "branches": {"view_branch"},
@@ -101,8 +120,15 @@ ROLE_PERMISSIONS = {
             "view_receipt",
             "view_financialauditevent",
         },
+        "attendance": {
+            "view_attendance",
+            "view_accessattempt",
+        },
     },
-    "Trainer": {"branches": {"view_branch"}},
+    "Trainer": {
+        "branches": {"view_branch"},
+        "attendance": {"view_attendance"},
+    },
     "POS Staff": {"branches": {"view_branch"}},
 }
 
