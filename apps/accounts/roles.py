@@ -46,6 +46,16 @@ ROLE_PERMISSIONS = {
             "add_reportpreset", "change_reportpreset", "delete_reportpreset", "view_reportpreset",
             "view_reportexportlog", "delete_reportexportlog",
         },
+        "staff": {
+            "add_staffprofile", "change_staffprofile", "delete_staffprofile", "view_staffprofile",
+            "add_staffdocument", "change_staffdocument", "delete_staffdocument", "view_staffdocument",
+            "add_trainerprofile", "change_trainerprofile", "delete_trainerprofile", "view_trainerprofile",
+            "add_trainermemberassignment", "change_trainermemberassignment", "delete_trainermemberassignment", "view_trainermemberassignment",
+            "add_trainingsession", "change_trainingsession", "delete_trainingsession", "view_trainingsession",
+            "add_shifttemplate", "change_shifttemplate", "delete_shifttemplate", "view_shifttemplate",
+            "add_staffshift", "change_staffshift", "delete_staffshift", "view_staffshift",
+            "add_leaverequest", "change_leaverequest", "delete_leaverequest", "view_leaverequest",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -82,6 +92,16 @@ ROLE_PERMISSIONS = {
         "analytics": {
             "add_reportpreset", "change_reportpreset", "view_reportpreset", "view_reportexportlog",
         },
+        "staff": {
+            "view_staffprofile", "change_staffprofile",
+            "add_staffdocument", "view_staffdocument",
+            "view_trainerprofile", "change_trainerprofile",
+            "add_trainermemberassignment", "change_trainermemberassignment", "view_trainermemberassignment",
+            "add_trainingsession", "change_trainingsession", "delete_trainingsession", "view_trainingsession",
+            "add_shifttemplate", "change_shifttemplate", "view_shifttemplate",
+            "add_staffshift", "change_staffshift", "view_staffshift",
+            "add_leaverequest", "change_leaverequest", "view_leaverequest",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -114,6 +134,14 @@ ROLE_PERMISSIONS = {
         "analytics": {
             "view_reportpreset",
         },
+        "staff": {
+            "view_staffprofile",
+            "view_trainerprofile",
+            "view_trainermemberassignment",
+            "add_trainingsession", "change_trainingsession", "view_trainingsession",
+            "view_staffshift",
+            "add_leaverequest", "view_leaverequest",
+        },
     },
     "Accountant": {
         "branches": {"view_branch"},
@@ -139,10 +167,23 @@ ROLE_PERMISSIONS = {
         "analytics": {
             "add_reportpreset", "change_reportpreset", "view_reportpreset", "view_reportexportlog",
         },
+        "staff": {
+            "view_staffprofile",
+            "view_trainerprofile",
+            "view_staffshift",
+            "view_leaverequest",
+        },
     },
     "Trainer": {
         "branches": {"view_branch"},
         "attendance": {"view_attendance"},
+        "staff": {
+            "view_trainerprofile", "change_trainerprofile",
+            "view_trainermemberassignment",
+            "add_trainingsession", "change_trainingsession", "view_trainingsession",
+            "view_staffshift",
+            "add_leaverequest", "view_leaverequest",
+        },
     },
     "POS Staff": {"branches": {"view_branch"}},
 }

@@ -3,6 +3,7 @@ import re
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 from django.templatetags.static import static
+from django.utils.safestring import mark_safe
 
 def color(name, default):
     value = os.getenv(name, default)
@@ -156,6 +157,54 @@ def can_see_reports(request):
     from apps.analytics.permissions import can_access_report_center
     return can_access_report_center(request.user)
 
+def can_see_staff(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_staff_directory
+    return can_view_staff_directory(request.user)
+
+def can_see_trainers(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_trainer_directory
+    return can_view_trainer_directory(request.user)
+
+def can_see_trainer_assignments(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_trainer_directory
+    return can_view_trainer_directory(request.user)
+
+def can_see_training_sessions(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_schedules
+    return can_view_schedules(request.user)
+
+def can_see_staff_schedules(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_schedules
+    return can_view_schedules(request.user)
+
+def can_see_leave_requests(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_staff_directory
+    return can_view_staff_directory(request.user)
+
+def can_see_trainer_performance(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_performance_analytics
+    return can_view_performance_analytics(request.user)
+
+def can_see_staff_reports(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.staff.permissions import can_view_staff_directory
+    return can_view_staff_directory(request.user)
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -232,6 +281,16 @@ def unfold_config():
                 {"title": "Outstanding Balances", "icon": "warning", "link": format_lazy("{}?status__in=ISSUED,PARTIALLY_PAID", invoice_changelist), "permission": can_see_billing},
                 {"title": "Payment Methods", "icon": "credit_card", "link": reverse_lazy("admin:billing_paymentmethod_changelist"), "permission": can_see_billing},
                 {"title": "Financial Audit", "icon": "policy", "link": reverse_lazy("admin:billing_financialauditevent_changelist"), "permission": can_see_financial_audit},
+            ]},
+            {"title": "Staff & Trainers", "items": [
+                {"title": mark_safe("Staff D&#105;rectory"), "icon": "badge", "link": reverse_lazy("admin:staff_staffprofile_changelist"), "permission": can_see_staff},
+                {"title": mark_safe("Trainer D&#105;rectory"), "icon": "fitness_center", "link": reverse_lazy("admin:staff_trainerprofile_changelist"), "permission": can_see_trainers},
+                {"title": "Trainer Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:staff_trainermemberassignment_changelist"), "permission": can_see_trainer_assignments},
+                {"title": "Training Sessions", "icon": "event_available", "link": reverse_lazy("admin:staff_trainingsession_changelist"), "permission": can_see_training_sessions},
+                {"title": "Staff Schedules", "icon": "calendar_month", "link": reverse_lazy("admin:staff_staffshift_changelist"), "permission": can_see_staff_schedules},
+                {"title": "Leave Requests", "icon": "time_to_leave", "link": reverse_lazy("admin:staff_leaverequest_changelist"), "permission": can_see_leave_requests},
+                {"title": "Trainer Performance", "icon": "insights", "link": reverse_lazy("staff-performance"), "permission": can_see_trainer_performance},
+                {"title": "Staff Reports", "icon": "summarize", "link": reverse_lazy("staff-reports"), "permission": can_see_staff_reports},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

@@ -11,6 +11,7 @@ from apps.analytics.views import (
 from apps.branches.views import switch_branch
 from apps.core.views import logo
 from apps.members.views import download_member_document, view_member_photo
+from apps.staff.views import staff_reports_view, trainer_performance_view
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="admin:index", permanent=False)),
@@ -23,5 +24,7 @@ urlpatterns = [
     path("admin/analytics/memberships/", admin.site.admin_view(membership_analytics_view), name="analytics-memberships"),
     path("admin/analytics/attendance/", admin.site.admin_view(attendance_analytics_view), name="analytics-attendance"),
     path("admin/analytics/reports/", admin.site.admin_view(report_center_view), name="analytics-reports"),
+    path("admin/staff/performance/", admin.site.admin_view(trainer_performance_view), name="staff-performance"),
+    path("admin/staff/reports/", admin.site.admin_view(staff_reports_view), name="staff-reports"),
     path("admin/", admin.site.urls),
 ]
