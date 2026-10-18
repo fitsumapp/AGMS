@@ -345,7 +345,10 @@ class ClassSession(UUIDTimeStampedModel, AuditFieldMixin):
     def save(self, *args, **kwargs):
         if self.status == self.SessionStatus.SCHEDULED and self.trainer_id:
             with transaction.atomic():
-                # Acquire row lock on TrainerProfile to serialize concurrent session creations
+                # Acquire row locks in consistent hierarchy: 1. Branch, 2. TrainerProfile
+                if self.branch_id:
+                    from apps.branches.models import Branch
+                    Branch.objects.select_for_update().get(pk=self.branch_id)
                 from apps.staff.models import TrainerProfile
                 TrainerProfile.objects.select_for_update().get(pk=self.trainer_id)
                 self.full_clean()
@@ -510,6 +513,42 @@ class ClassBooking(UUIDTimeStampedModel, AuditFieldMixin):
             )
             if pt_overlaps.exists():
                 raise ValidationError({"member": f"{self.member.full_name} has a scheduled personal training session at this time."})
+
+        # Check capacity for confirmed spots
+        if self.status == self.BookingStatus.BOOKED and self.session_id:
+            active_spots = ClassBooking.objects.filter(
+                session=self.session,
+                status=self.BookingStatus.BOOKED,
+            )
+            if self.pk:
+                active_spots = active_spots.exclude(pk=self.pk)
+            if active_spots.count() >= self.session.capacity:
+                raise ValidationError({"session": f"Class '{self.session.class_type.name}' has reached maximum capacity ({self.session.capacity})."})
+
+        # Check weekly class limit if configured on membership package
+        if self.status == self.BookingStatus.BOOKED and self.session_id and self.member_id and self.membership_id:
+            package = getattr(self.membership, "package", None)
+            allowed_per_week = getattr(package, "allowed_classes_per_week", None) if package else None
+            if allowed_per_week is not None:
+                session_date = self.session.session_date
+                week_start = session_date - timedelta(days=session_date.weekday())
+                week_end = week_start + timedelta(days=6)
+                weekly_qs = ClassBooking.objects.filter(
+                    member=self.member,
+                    session__session_date__gte=week_start,
+                    session__session_date__lte=week_end,
+                    status__in=[
+                        self.BookingStatus.BOOKED,
+                        self.BookingStatus.ATTENDED,
+                        self.BookingStatus.NO_SHOW,
+                    ],
+                )
+                if self.pk:
+                    weekly_qs = weekly_qs.exclude(pk=self.pk)
+                if weekly_qs.count() >= allowed_per_week:
+                    raise ValidationError({
+                        "member": f"Member {self.member.full_name} has reached the weekly class limit of {allowed_per_week} class(es) for the week of {week_start} to {week_end}."
+                    })
 
     def save(self, *args, **kwargs):
         if self.status in [self.BookingStatus.BOOKED, self.BookingStatus.WAITLISTED] and self.session_id:

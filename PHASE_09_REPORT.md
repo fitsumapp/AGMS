@@ -265,3 +265,62 @@ PostgreSQL transactional concurrency was verified with multi-threaded tests usin
 - [x] Multi-threaded PostgreSQL concurrency testing
 - [x] 100% test pass rate across all 249 tests
 - [x] Phase 10 was not started
+
+---
+
+## 21. Phase 09 Final Verification & Hardening
+
+### 1. Waitlist Concurrency Hardening
+- **Duplicate Promotion & Overflow Prevention**:
+  - In `apps/classes/services.py:promote_from_waitlist()`, added strict capacity guard re-checks:
+    `active_booked = ClassBooking.objects.filter(session=session, status=ClassBooking.BookingStatus.BOOKED).count()`.
+    If `active_booked >= session.capacity`, promotion is aborted immediately.
+  - Added pessimistic locking on the candidate booking:
+    `candidate = ClassBooking.objects.select_for_update().get(pk=candidate.pk)`.
+    If another concurrent transaction already promoted or cancelled this candidate, it skips to the next eligible FIFO entry.
+  - Re-evaluates both membership validity and weekly class quotas at the exact moment of promotion.
+  - Updates `ClassSession.updated_at` within `cancel_class_booking` and `promote_from_waitlist` to force serialization across concurrent cancellations and promotions.
+- **Concurrent Test**: Verified in `test_concurrent_waitlist_promotions_and_capacity_safety` with 2 simultaneous cancellations and 2 waitlisted members competing for 2 released spots without capacity overflow or double promotion.
+
+### 2. Weekly Class Limits Enforcement
+- **Package Policy**: Enforced `allowed_classes_per_week` on `MembershipPackage`.
+- **Ethiopia-Local Calendar Week Boundaries**:
+  - Calculated calendar week boundaries using `session_date` and `timezone.localdate()`:
+    `week_start = session_date - timedelta(days=session_date.weekday())` (Monday)
+    `week_end = week_start + timedelta(days=6)` (Sunday)
+- **Accounting Rules**:
+  - `BOOKED`, `ATTENDED`, and `NO_SHOW` count toward the weekly limit.
+  - `CANCELLED` does not count (cancelling immediately restores member quota).
+  - `WAITLISTED` does not count toward the limit until actively promoted.
+- **Boundary & Model Validation**: Added validation in `ClassBooking.clean()` and `book_class_session()` service, verified in `test_weekly_class_limits_and_calendar_week_boundaries`.
+
+### 3. Membership Payment Policy Alignment
+- **Shared Business Policy**: Class booking eligibility in `apps/classes/services.py:get_member_eligible_membership()` now directly aligns with `GymSettings.allow_access_with_balance`:
+  - `CLEARED` and `WAIVED_COMPLIMENTARY`: Granted access immediately.
+  - `PENDING`: Permitted only if `GymSettings.allow_access_with_balance = True` AND at least one verified payment exists on the membership's invoice (`Payment.objects.filter(invoice__membership=ms, status=Payment.Status.VERIFIED).exists()`). Completely unpaid pending memberships remain blocked.
+  - Non-complimentary waived or unpaid memberships are strictly rejected.
+- **Test Coverage**: Verified in `test_membership_payment_policy_and_balance_access` covering Cleared, Unpaid Pending, Partial Verified Pending with balance allowance, and Complimentary Waived.
+
+### 4. Scheduling Concurrency & Deadlock Prevention
+- **Global Lock Hierarchy**:
+  To prevent database deadlocks between concurrent Group Class scheduling and Phase 08 Personal Training scheduling, a strict, ordered locking sequence was established across `apps/classes` and `apps/staff`:
+  1. `Branch` (`pk`)
+  2. `TrainerProfile` (`pk`)
+  3. `ClassSession` (`pk`)
+  4. `Member` (`pk`)
+  5. `ClassBooking` (`pk`)
+- **Cross-Schedule Conflict Checks**:
+  - `TrainingSession.clean()` now inspects overlapping `ClassSession` instances for the trainer and active `ClassBooking` instances for the member.
+  - `ClassSession.clean()` inspects overlapping `TrainingSession` instances for the trainer.
+- **Concurrent Test**:
+  - `test_concurrent_class_scheduling_trainer_and_room_serialization`: Multi-threaded test proving two simultaneous requests to schedule conflicting classes for the same trainer or room are strictly serialized, resulting in exactly one success and one conflict rejection.
+  - `test_cross_conflict_pt_and_group_classes`: Validates that trainers and members cannot have personal training and group classes booked at overlapping times.
+
+### 5. Final Verification Metrics
+- **Django System Check**: `System check identified no issues (0 silenced)`
+- **Migrations Check**: `No changes detected` (dry-run)
+- **Phase 09 Tests (`tests/test_classes.py`)**: 20/20 passed in 104.82s
+- **Full AGMS Test Suite (`pytest -q`)**: **254 passed, 0 failed in 462.39s (0:07:42)**
+- **Regression Rate**: **0%**
+- **Data Integrity**: All customer data and previous Phase 01–08 features preserved intact.
+

@@ -37,7 +37,9 @@ def schedule_training_session(
         raise ValidationError({"end_time": "Session end time must be after start time."})
 
     with transaction.atomic():
-        # Acquire row locks on TrainerProfile and Member to serialize concurrent bookings
+        # Acquire row locks in consistent hierarchy: 1. Branch, 2. TrainerProfile, 3. Member
+        from apps.branches.models import Branch
+        locked_branch = Branch.objects.select_for_update().get(pk=branch.pk)
         locked_trainer = (
             TrainerProfile.objects.select_for_update()
             .select_related("staff")

@@ -505,10 +505,40 @@ class TrainingSession(UUIDTimeStampedModel, AuditFieldMixin):
             if member_conflicts.exists():
                 raise ValidationError({"member": f"{self.member.full_name} is already scheduled for another training session at this time."})
 
+        # Check cross-schedule conflicts with Group Classes (Phase 09)
+        if self.session_date and self.start_time and self.end_time and self.status == self.SessionStatus.SCHEDULED:
+            if self.trainer_id:
+                from apps.classes.models import ClassSession
+                trainer_class_conflicts = ClassSession.objects.filter(
+                    trainer=self.trainer,
+                    session_date=self.session_date,
+                    status=ClassSession.SessionStatus.SCHEDULED,
+                    start_time__lt=self.end_time,
+                    end_time__gt=self.start_time,
+                )
+                if trainer_class_conflicts.exists():
+                    raise ValidationError({"start_time": f"Trainer {self.trainer.full_name} is already leading a group class at this time."})
+
+            if self.member_id:
+                from apps.classes.models import ClassBooking
+                member_class_conflicts = ClassBooking.objects.filter(
+                    member=self.member,
+                    status=ClassBooking.BookingStatus.BOOKED,
+                    session__session_date=self.session_date,
+                    session__status="SCHEDULED",
+                    session__start_time__lt=self.end_time,
+                    session__end_time__gt=self.start_time,
+                )
+                if member_class_conflicts.exists():
+                    raise ValidationError({"member": f"{self.member.full_name} is already booked for a group class at this time."})
+
     def save(self, *args, **kwargs):
         if self.status == self.SessionStatus.SCHEDULED and self.trainer_id and self.member_id:
             with transaction.atomic():
-                # Acquire row lock on TrainerProfile and Member to serialize concurrent bookings
+                # Acquire row locks in consistent hierarchy: 1. Branch, 2. TrainerProfile, 3. Member
+                if self.branch_id:
+                    from apps.branches.models import Branch
+                    Branch.objects.select_for_update().get(pk=self.branch_id)
                 TrainerProfile.objects.select_for_update().get(pk=self.trainer_id)
                 from apps.members.models import Member
                 Member.objects.select_for_update().get(pk=self.member_id)

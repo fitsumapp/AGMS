@@ -20,7 +20,8 @@ from .models import (
 def get_member_eligible_membership(member, target_date=None, target_branch=None):
     """
     Finds and validates an active, paid, unexpired, and unfrozen membership for the member.
-    Checks package group class eligibility and branch permission.
+    Checks package group class eligibility, payment clearance (including allow_access_with_balance),
+    and branch permissions.
     """
     target_date = target_date or timezone.localdate()
     memberships = (
@@ -29,19 +30,42 @@ def get_member_eligible_membership(member, target_date=None, target_branch=None)
             status=Membership.Status.ACTIVE,
             start_date__lte=target_date,
             end_date__gte=target_date,
-            payment_clearance_status__in=[
-                Membership.PaymentClearance.CLEARED,
-                Membership.PaymentClearance.WAIVED_COMPLIMENTARY,
-            ],
         )
         .select_related("package", "home_branch")
         .order_by("-end_date")
     )
 
+    from apps.core.models import GymSettings
+    settings_obj = GymSettings.objects.first()
+    allow_balance = settings_obj.allow_access_with_balance if settings_obj else False
+
     for ms in memberships:
         # Check freeze
         if hasattr(ms, "is_frozen") and ms.is_frozen:
             continue
+
+        # Check payment clearance status
+        if ms.payment_clearance_status in [
+            Membership.PaymentClearance.CLEARED,
+            Membership.PaymentClearance.WAIVED_COMPLIMENTARY,
+        ]:
+            pass  # Fully cleared or complimentary
+        elif ms.payment_clearance_status == Membership.PaymentClearance.PENDING:
+            has_verified_payment = False
+            if allow_balance:
+                try:
+                    from apps.billing.models import Payment
+                    has_verified_payment = Payment.objects.filter(
+                        invoice__membership=ms,
+                        status=Payment.Status.VERIFIED,
+                    ).exists()
+                except Exception:
+                    has_verified_payment = False
+            if not (allow_balance and has_verified_payment):
+                continue
+        else:
+            continue
+
         # Check package class eligibility
         if not getattr(ms.package, "classes_included", True):
             continue
@@ -57,7 +81,7 @@ def get_member_eligible_membership(member, target_date=None, target_branch=None)
 def book_class_session(actor, session, member):
     """
     Concurrency-safe transactional booking of a member into a group class session.
-    Enforces membership validity, class eligibility, capacity limits, and waitlist promotion.
+    Enforces membership validity, class eligibility, weekly class quota, capacity limits, and waitlist promotion.
     Locks ClassSession row to eliminate race conditions.
     """
     if member.status != Member.MemberStatus.ACTIVE:
@@ -121,6 +145,29 @@ def book_class_session(actor, session, member):
         if pt_overlaps.exists():
             raise ValidationError({"member": f"{locked_member.full_name} has a conflicting personal training session at this time."})
 
+        # Check weekly class limits on membership package
+        allowed_per_week = getattr(eligible_membership.package, "allowed_classes_per_week", None)
+        if allowed_per_week is not None:
+            week_start = locked_session.session_date - timedelta(days=locked_session.session_date.weekday())
+            week_end = week_start + timedelta(days=6)
+            weekly_booked_count = ClassBooking.objects.filter(
+                member=locked_member,
+                session__session_date__gte=week_start,
+                session__session_date__lte=week_end,
+                status__in=[
+                    ClassBooking.BookingStatus.BOOKED,
+                    ClassBooking.BookingStatus.ATTENDED,
+                    ClassBooking.BookingStatus.NO_SHOW,
+                ],
+            ).count()
+            if weekly_booked_count >= allowed_per_week:
+                raise ValidationError({
+                    "member": (
+                        f"Member {locked_member.full_name} has reached the weekly class limit "
+                        f"of {allowed_per_week} class(es) for the week of {week_start} to {week_end}."
+                    )
+                })
+
         # Check capacity under row lock
         active_booked_count = ClassBooking.objects.filter(
             session=locked_session,
@@ -136,6 +183,7 @@ def book_class_session(actor, session, member):
                 status=ClassBooking.BookingStatus.BOOKED,
                 booked_by=actor,
             )
+            ClassSession.objects.filter(pk=locked_session.pk).update(updated_at=timezone.now())
             record_event(
                 actor,
                 "class_booking_created",
@@ -165,6 +213,7 @@ def book_class_session(actor, session, member):
                 waitlist_position=waitlist_position,
                 booked_by=actor,
             )
+            ClassSession.objects.filter(pk=locked_session.pk).update(updated_at=timezone.now())
             record_event(
                 actor,
                 "class_booking_created",
@@ -184,24 +233,33 @@ def book_class_session(actor, session, member):
 def cancel_class_booking(actor, booking, reason=""):
     """
     Concurrency-safe cancellation of a class booking.
+    Locks session and booking to prevent duplicate cancellation or phantom promotions.
     If a confirmed participant cancels, automatically promotes the next eligible waitlisted member.
     """
     with transaction.atomic():
         locked_session = ClassSession.objects.select_for_update().get(pk=booking.session_id)
-        original_status = booking.status
+        locked_booking = ClassBooking.objects.select_for_update().get(pk=booking.pk)
 
-        booking.status = ClassBooking.BookingStatus.CANCELLED
-        booking.cancelled_at = timezone.now()
-        booking.cancelled_by = actor
-        booking.cancellation_reason = reason or "Cancelled by user"
-        booking.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancellation_reason"])
+        if locked_booking.status == ClassBooking.BookingStatus.CANCELLED:
+            raise ValidationError({"booking": "This booking has already been cancelled."})
+
+        original_status = locked_booking.status
+
+        locked_booking.status = ClassBooking.BookingStatus.CANCELLED
+        locked_booking.cancelled_at = timezone.now()
+        locked_booking.cancelled_by = actor
+        locked_booking.cancellation_reason = reason or "Cancelled by user"
+        locked_booking.waitlist_position = None
+        locked_booking.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancellation_reason", "waitlist_position"])
+
+        ClassSession.objects.filter(pk=locked_session.pk).update(updated_at=timezone.now())
 
         record_event(
             actor,
             "class_booking_cancelled",
-            booking,
+            locked_booking,
             {
-                "member_number": booking.member.member_number,
+                "member_number": locked_booking.member.member_number,
                 "class_name": locked_session.class_type.name,
                 "reason": reason or "Cancelled",
             },
@@ -215,16 +273,27 @@ def cancel_class_booking(actor, booking, reason=""):
         elif original_status == ClassBooking.BookingStatus.WAITLISTED:
             renumber_waitlist(locked_session)
 
-        return booking
+        return locked_booking
 
 
 def promote_from_waitlist(actor, session):
     """
     Promotes the highest-ranking eligible waitlisted member into a confirmed class spot.
-    Re-validates membership eligibility at promotion time.
+    Re-validates membership eligibility and weekly class quota at promotion time.
+    Locks waitlist candidates to prevent race conditions during simultaneous cancellations.
     """
+    # Verify open capacity under session row lock
+    active_booked_count = ClassBooking.objects.filter(
+        session=session,
+        status=ClassBooking.BookingStatus.BOOKED,
+    ).count()
+
+    if active_booked_count >= session.capacity:
+        return None
+
     waitlisted_bookings = (
-        ClassBooking.objects.filter(
+        ClassBooking.objects.select_for_update()
+        .filter(
             session=session,
             status=ClassBooking.BookingStatus.WAITLISTED,
         )
@@ -232,6 +301,7 @@ def promote_from_waitlist(actor, session):
         .order_by("waitlist_position", "booked_at")
     )
 
+    promoted_booking = None
     for candidate in waitlisted_bookings:
         # Revalidate eligibility
         eligible_membership = get_member_eligible_membership(
@@ -240,10 +310,29 @@ def promote_from_waitlist(actor, session):
             target_branch=session.branch,
         )
         if not eligible_membership:
-            # Skip candidate if membership is no longer active
             candidate.notes = f"{candidate.notes}\n[Waitlist Skip]: Ineligible membership at promotion time.".strip()
             candidate.save(update_fields=["notes"])
             continue
+
+        # Revalidate weekly class limit
+        allowed_per_week = getattr(eligible_membership.package, "allowed_classes_per_week", None)
+        if allowed_per_week is not None:
+            week_start = session.session_date - timedelta(days=session.session_date.weekday())
+            week_end = week_start + timedelta(days=6)
+            weekly_booked_count = ClassBooking.objects.filter(
+                member=candidate.member,
+                session__session_date__gte=week_start,
+                session__session_date__lte=week_end,
+                status__in=[
+                    ClassBooking.BookingStatus.BOOKED,
+                    ClassBooking.BookingStatus.ATTENDED,
+                    ClassBooking.BookingStatus.NO_SHOW,
+                ],
+            ).count()
+            if weekly_booked_count >= allowed_per_week:
+                candidate.notes = f"{candidate.notes}\n[Waitlist Skip]: Weekly class limit reached at promotion time.".strip()
+                candidate.save(update_fields=["notes"])
+                continue
 
         # Promote candidate
         candidate.status = ClassBooking.BookingStatus.BOOKED
@@ -251,6 +340,8 @@ def promote_from_waitlist(actor, session):
         candidate.promoted_from_waitlist_at = timezone.now()
         candidate.waitlist_position = None
         candidate.save(update_fields=["status", "membership", "promoted_from_waitlist_at", "waitlist_position"])
+
+        ClassSession.objects.filter(pk=session.pk).update(updated_at=timezone.now())
 
         record_event(
             actor,
@@ -262,9 +353,11 @@ def promote_from_waitlist(actor, session):
                 "branch_code": session.branch.code,
             },
         )
+        promoted_booking = candidate
         break
 
     renumber_waitlist(session)
+    return promoted_booking
 
 
 def renumber_waitlist(session):
@@ -326,39 +419,48 @@ def schedule_class_session(
 ):
     """
     Transactional creation of a group class session.
-    Enforces trainer branch authorization, PT/class conflict checks, and room conflicts.
+    Acquires consistent row locks on Branch and TrainerProfile to serialize concurrent scheduling
+    and guarantee deadlock-free execution with personal training sessions.
     """
     capacity = capacity if capacity is not None else class_type.default_capacity
     waitlist_capacity = waitlist_capacity if waitlist_capacity is not None else class_type.default_waitlist_capacity
 
-    session = ClassSession(
-        class_type=class_type,
-        branch=branch,
-        room=room.strip(),
-        trainer=trainer,
-        session_date=session_date,
-        start_time=start_time,
-        end_time=end_time,
-        capacity=capacity,
-        waitlist_capacity=waitlist_capacity,
-        notes=notes,
-        schedule_template=template,
-        status=ClassSession.SessionStatus.SCHEDULED,
-    )
-    session.clean()
-    session.save()
+    from apps.branches.models import Branch
+    from apps.staff.models import TrainerProfile
 
-    record_event(
-        actor,
-        "class_session_created",
-        session,
-        {
-            "class_name": class_type.name,
-            "branch_code": branch.code,
-            "employee_number": trainer.employee_number,
-        },
-    )
-    return session
+    with transaction.atomic():
+        # Consistent lock hierarchy: 1. Branch, 2. TrainerProfile
+        locked_branch = Branch.objects.select_for_update().get(pk=branch.pk)
+        locked_trainer = TrainerProfile.objects.select_for_update().get(pk=trainer.pk)
+
+        session = ClassSession(
+            class_type=class_type,
+            branch=locked_branch,
+            room=room.strip(),
+            trainer=locked_trainer,
+            session_date=session_date,
+            start_time=start_time,
+            end_time=end_time,
+            capacity=capacity,
+            waitlist_capacity=waitlist_capacity,
+            notes=notes,
+            schedule_template=template,
+            status=ClassSession.SessionStatus.SCHEDULED,
+        )
+        session.clean()
+        session.save()
+
+        record_event(
+            actor,
+            "class_session_created",
+            session,
+            {
+                "class_name": class_type.name,
+                "branch_code": locked_branch.code,
+                "employee_number": locked_trainer.employee_number,
+            },
+        )
+        return session
 
 
 def generate_sessions_from_schedule(template, start_date=None, end_date=None, actor=None):
