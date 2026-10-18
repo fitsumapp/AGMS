@@ -132,6 +132,38 @@ class StaffProfile(UUIDTimeStampedModel, AuditFieldMixin):
     def save(self, *args, **kwargs):
         if not self.employee_number:
             self.employee_number = StaffSequence.next_employee_number()
+
+        # Security: When staff is terminated, immediately revoke login and branch access
+        if self.employment_status == self.EmploymentStatus.TERMINATED and self.user_id:
+            if not self.termination_date:
+                self.termination_date = timezone.localdate()
+            if self.user.is_staff or self.user.is_active:
+                self.user.is_staff = False
+                self.user.is_active = False
+                self.user.save(update_fields=["is_staff", "is_active"])
+            self.user.branch_access.filter(is_active=True).update(is_active=False, is_primary=False)
+            if hasattr(self, "trainer_profile"):
+                trainer = self.trainer_profile
+                if trainer.status != "INACTIVE":
+                    trainer.status = "INACTIVE"
+                    trainer.save(update_fields=["status"])
+                trainer.member_assignments.filter(
+                    status="ACTIVE"
+                ).update(status="CANCELLED")
+                upcoming_sessions = trainer.sessions.filter(
+                    status="SCHEDULED",
+                    session_date__gte=self.termination_date,
+                )
+                for s in upcoming_sessions:
+                    s.status = "CANCELLED"
+                    s.cancellation_reason = "Staff employment terminated."
+                    s.cancelled_at = timezone.now()
+                    s.save(update_fields=["status", "cancellation_reason", "cancelled_at"])
+            self.shifts.filter(
+                status="SCHEDULED",
+                date__gte=self.termination_date,
+            ).update(status="CANCELLED")
+
         super().save(*args, **kwargs)
 
     @property
@@ -330,6 +362,32 @@ class TrainerMemberAssignment(UUIDTimeStampedModel, AuditFieldMixin):
             if existing.exists():
                 raise ValidationError({"member": f"{self.member.full_name} already has an active assignment with Trainer {self.trainer.full_name}."})
 
+        # Enforce trainer active status
+        if self.trainer_id and self.status == self.AssignmentStatus.ACTIVE:
+            if self.trainer.status != TrainerProfile.TrainerStatus.ACTIVE:
+                raise ValidationError({"trainer": f"Trainer {self.trainer.full_name} is not active and cannot accept new client assignments."})
+
+        # Enforce trainer client capacity limit
+        if self.trainer_id and self.status == self.AssignmentStatus.ACTIVE:
+            active_qs = TrainerMemberAssignment.objects.filter(
+                trainer=self.trainer,
+                status=self.AssignmentStatus.ACTIVE,
+            )
+            if self.pk:
+                active_qs = active_qs.exclude(pk=self.pk)
+            if active_qs.count() >= self.trainer.max_active_clients:
+                raise ValidationError({"trainer": f"Trainer {self.trainer.full_name} has reached maximum client capacity ({self.trainer.max_active_clients})."})
+
+    def save(self, *args, **kwargs):
+        if self.status == self.AssignmentStatus.ACTIVE and self.trainer_id:
+            with transaction.atomic():
+                # Acquire row lock on TrainerProfile to serialize concurrent assignments
+                TrainerProfile.objects.select_for_update().get(pk=self.trainer_id)
+                self.full_clean()
+                return super().save(*args, **kwargs)
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.member.full_name} → {self.trainer.full_name} ({self.status})"
 
@@ -412,6 +470,13 @@ class TrainingSession(UUIDTimeStampedModel, AuditFieldMixin):
             if not self.trainer.is_assigned_to_branch(self.branch):
                 raise ValidationError({"branch": f"Trainer is not authorized for branch {self.branch.name}."})
 
+        # Ensure trainer and member are active for scheduled sessions
+        if self.status == self.SessionStatus.SCHEDULED:
+            if self.trainer_id and self.trainer.status != TrainerProfile.TrainerStatus.ACTIVE:
+                raise ValidationError({"trainer": f"Trainer {self.trainer.full_name} is not active and cannot be scheduled."})
+            if self.member_id and self.member.status != "ACTIVE":
+                raise ValidationError({"member": f"Member {self.member.full_name} is not active and cannot be scheduled."})
+
         # Check trainer scheduling conflict
         if self.trainer_id and self.session_date and self.start_time and self.end_time and self.status == self.SessionStatus.SCHEDULED:
             trainer_conflicts = TrainingSession.objects.filter(
@@ -439,6 +504,18 @@ class TrainingSession(UUIDTimeStampedModel, AuditFieldMixin):
                 member_conflicts = member_conflicts.exclude(pk=self.pk)
             if member_conflicts.exists():
                 raise ValidationError({"member": f"{self.member.full_name} is already scheduled for another training session at this time."})
+
+    def save(self, *args, **kwargs):
+        if self.status == self.SessionStatus.SCHEDULED and self.trainer_id and self.member_id:
+            with transaction.atomic():
+                # Acquire row lock on TrainerProfile and Member to serialize concurrent bookings
+                TrainerProfile.objects.select_for_update().get(pk=self.trainer_id)
+                from apps.members.models import Member
+                Member.objects.select_for_update().get(pk=self.member_id)
+                self.full_clean()
+                return super().save(*args, **kwargs)
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def complete_session(self, notes=""):
         self.status = self.SessionStatus.COMPLETED

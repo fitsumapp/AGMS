@@ -12,6 +12,7 @@ ALLOWED_AUDIT_KEYS = {
     "amount", "total_amount", "paid_amount", "balance_due", "payment_method",
     "check_in_method", "check_out_method", "device_code", "result", "reason_code",
     "override_reason", "credential_type", "attendance_id",
+    "employee_number", "session_id",
 }
 
 

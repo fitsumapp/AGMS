@@ -20,8 +20,43 @@ from .models import (
 class StaffDocumentInline(TabularInline):
     model = StaffDocument
     extra = 1
-    fields = ("title", "document_type", "file", "uploaded_at", "uploaded_by")
-    readonly_fields = ("uploaded_at",)
+    fields = ("title", "document_type", "file", "download_link", "uploaded_at", "uploaded_by")
+    readonly_fields = ("download_link", "uploaded_at")
+
+    def download_link(self, obj):
+        if obj.pk and obj.file:
+            from django.urls import reverse
+            from django.utils.html import format_html
+            url = reverse("staff-document-download", kwargs={"document_id": obj.pk})
+            return format_html(
+                '<a href="{}" class="font-semibold text-primary-600 hover:underline dark:text-primary-400" target="_blank">'
+                '<span class="material-symbols-outlined align-middle text-sm">download</span> Download</a>',
+                url,
+            )
+        return "-"
+    download_link.short_description = "Secure Download"
+
+    def has_view_permission(self, request, obj=None):
+        if not request.user.is_authenticated or not request.user.is_staff or not request.user.is_active:
+            return False
+        if is_owner(request.user) or request.user.is_superuser:
+            return True
+        if obj and obj.user_id == request.user.id:
+            return True
+        if has_role(request.user, "Branch Manager"):
+            if obj:
+                staff_branches = obj.get_assigned_branches()
+                from apps.branches.services import can_access_branch
+                return any(can_access_branch(request.user, b) for b in staff_branches)
+            return True
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        if is_owner(request.user) or request.user.is_superuser:
+            return True
+        if has_role(request.user, "Branch Manager"):
+            return True
+        return False
 
 
 @admin.register(StaffProfile)
@@ -46,6 +81,17 @@ class StaffProfileAdmin(ModelAdmin):
     )
     inlines = [StaffDocumentInline]
     readonly_fields = ("created_at", "updated_at")
+    actions = ["terminate_selected_staff"]
+
+    @admin.action(description="Terminate employment and revoke staff access for selected employees")
+    def terminate_selected_staff(self, request, queryset):
+        from .services import terminate_staff
+        count = 0
+        for staff in queryset:
+            if staff.employment_status != StaffProfile.EmploymentStatus.TERMINATED:
+                terminate_staff(request.user, staff, reason="Admin action termination")
+                count += 1
+        self.message_user(request, f"Successfully terminated {count} staff member(s) and revoked access.", messages.SUCCESS)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("user", "primary_branch")

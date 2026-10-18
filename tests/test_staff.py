@@ -1,20 +1,24 @@
+import concurrent.futures
 from datetime import date, time, timedelta
 from decimal import Decimal
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.accounts.roles import has_role, is_owner, seed_roles
-from apps.branches.models import Branch, UserBranchAccess
+from apps.branches.models import AuditEvent, Branch, UserBranchAccess
 from apps.core.models import GymProfile
 from apps.members.models import Member
 from apps.members.services import register_member
 from apps.staff.models import (
     LeaveRequest,
     ShiftTemplate,
+    StaffDocument,
     StaffProfile,
     StaffSequence,
     StaffShift,
@@ -26,6 +30,11 @@ from apps.staff.selectors import (
     get_branch_staffing_summary,
     get_staff_scheduling_metrics,
     get_trainer_metrics,
+)
+from apps.staff.services import (
+    assign_trainer_to_member,
+    schedule_training_session,
+    terminate_staff,
 )
 
 pytestmark = pytest.mark.django_db
@@ -479,3 +488,406 @@ def test_empty_staffing_metrics_stability():
     scheduling = get_staff_scheduling_metrics()
     assert scheduling["total_working_shifts"] == 0
     assert scheduling["coverage_rate"] == 0.0
+
+
+# =========================================================================
+# PHASE 08 FINAL SECURITY & INTEGRITY VERIFICATION TESTS
+# =========================================================================
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_training_session_bookings_serialize(branches, staff_users, sample_member):
+    """
+    Test 1: Verify PostgreSQL row locks serialize concurrent requests to schedule
+    overlapping sessions for the same trainer. Exactly one must succeed and the
+    second must raise ValidationError.
+    """
+    b1, _ = branches
+    owner = staff_users["owner"]
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    trainer = TrainerProfile.objects.create(staff=staff)
+
+    member2 = register_member(
+        actor=owner,
+        home_branch=b1,
+        first_name="Kenenisa",
+        last_name="Bekele",
+        phone="+251911990011",
+        gender=Member.Gender.MALE,
+    )
+
+    session_date = date(2026, 11, 10)
+
+    def attempt_schedule(mem, st, et):
+        try:
+            schedule_training_session(
+                actor=owner,
+                trainer=trainer,
+                member=mem,
+                branch=b1,
+                session_date=session_date,
+                start_time=st,
+                end_time=et,
+            )
+            return "SUCCESS"
+        except Exception as e:
+            return str(e)
+        finally:
+            connection.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(attempt_schedule, sample_member, time(10, 0), time(11, 0))
+        f2 = executor.submit(attempt_schedule, member2, time(10, 30), time(11, 30))
+        r1 = f1.result()
+        r2 = f2.result()
+
+    results = [r1, r2]
+    success_count = sum(1 for r in results if r == "SUCCESS")
+    conflict_count = sum(1 for r in results if "conflicting scheduled session" in r)
+
+    assert success_count == 1
+    assert conflict_count == 1
+    assert TrainingSession.objects.filter(
+        trainer=trainer,
+        session_date=session_date,
+        status=TrainingSession.SessionStatus.SCHEDULED,
+    ).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_member_session_bookings_serialize(branches, staff_users, sample_member):
+    """
+    Test 1b: Verify concurrent requests to schedule overlapping sessions for the SAME
+    member across different trainers serialize and prevent double-booking the member.
+    """
+    b1, _ = branches
+    owner = staff_users["owner"]
+    staff1 = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer 1")
+    trainer1 = TrainerProfile.objects.create(staff=staff1)
+
+    u2 = User.objects.create_user("trainer2@agms.test", "Trainer2Pass123!", is_staff=True)
+    from django.contrib.auth.models import Group
+    u2.groups.add(Group.objects.get(name="Trainer"))
+    UserBranchAccess.objects.create(user=u2, branch=b1, is_active=True, is_primary=True)
+    staff2 = StaffProfile.objects.create(user=u2, primary_branch=b1, job_title="Trainer 2")
+    trainer2 = TrainerProfile.objects.create(staff=staff2)
+
+    session_date = date(2026, 11, 12)
+
+    def attempt_schedule_member(tr, st, et):
+        try:
+            schedule_training_session(
+                actor=owner,
+                trainer=tr,
+                member=sample_member,
+                branch=b1,
+                session_date=session_date,
+                start_time=st,
+                end_time=et,
+            )
+            return "SUCCESS"
+        except Exception as e:
+            return str(e)
+        finally:
+            connection.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(attempt_schedule_member, trainer1, time(14, 0), time(15, 0))
+        f2 = executor.submit(attempt_schedule_member, trainer2, time(14, 30), time(15, 30))
+        r1 = f1.result()
+        r2 = f2.result()
+
+    results = [r1, r2]
+    success_count = sum(1 for r in results if r == "SUCCESS")
+    conflict_count = sum(1 for r in results if "already scheduled for another training session" in r)
+
+    assert success_count == 1
+    assert conflict_count == 1
+    assert TrainingSession.objects.filter(
+        member=sample_member,
+        session_date=session_date,
+        status=TrainingSession.SessionStatus.SCHEDULED,
+    ).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_trainer_capacity_enforcement_boundary_and_concurrency(branches, staff_users):
+    """
+    Test 3: Verify max_active_clients capacity limit is strictly enforced at boundary
+    and protects against concurrent assignments exceeding capacity.
+    """
+    b1, _ = branches
+    owner = staff_users["owner"]
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    trainer = TrainerProfile.objects.create(staff=staff, max_active_clients=2)
+
+    m1 = register_member(actor=owner, home_branch=b1, first_name="Cap1", last_name="M", phone="+251911000011")
+    m2 = register_member(actor=owner, home_branch=b1, first_name="Cap2", last_name="M", phone="+251911000012")
+    m3 = register_member(actor=owner, home_branch=b1, first_name="Cap3", last_name="M", phone="+251911000013")
+
+    # Boundary 1: First assignment fills slot 1 of 2
+    a1 = assign_trainer_to_member(actor=owner, trainer=trainer, member=m1, branch=b1)
+    assert a1.status == TrainerMemberAssignment.AssignmentStatus.ACTIVE
+    assert trainer.active_client_count() == 1
+
+    # Concurrency: Two concurrent requests compete for the 1 remaining slot
+    def attempt_assignment(mem):
+        try:
+            assign_trainer_to_member(actor=owner, trainer=trainer, member=mem, branch=b1)
+            return "SUCCESS"
+        except Exception as e:
+            return str(e)
+        finally:
+            connection.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(attempt_assignment, m2)
+        f2 = executor.submit(attempt_assignment, m3)
+        r1 = f1.result()
+        r2 = f2.result()
+
+    results = [r1, r2]
+    assert results.count("SUCCESS") == 1
+    capacity_rejected = [r for r in results if "maximum client capacity" in r]
+    assert len(capacity_rejected) == 1
+
+    # In database: capacity is strictly 2, not 3
+    assert TrainerMemberAssignment.objects.filter(
+        trainer=trainer,
+        status=TrainerMemberAssignment.AssignmentStatus.ACTIVE,
+    ).count() == 2
+
+    # Boundary 2: Subsequent assignment is rejected
+    m4 = register_member(actor=owner, home_branch=b1, first_name="Cap4", last_name="M", phone="+251911000014")
+    with pytest.raises(ValidationError) as exc:
+        assign_trainer_to_member(actor=owner, trainer=trainer, member=m4, branch=b1)
+    assert "maximum client capacity (2)" in str(exc.value)
+
+
+def test_private_staff_documents_unauthenticated_denied(client, branches, staff_users):
+    """
+    Test 2a: Unauthenticated requests to private staff documents must be redirected to login.
+    """
+    b1, _ = branches
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    doc_file = SimpleUploadedFile("contract.pdf", b"%PDF-1.4 mock contract content", content_type="application/pdf")
+    doc = StaffDocument.objects.create(
+        staff=staff,
+        title="Trainer Contract",
+        document_type=StaffDocument.DocumentType.CONTRACT,
+        file=doc_file,
+    )
+    url = reverse("staff-document-download", kwargs={"document_id": doc.pk})
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert "/admin/login/" in resp.url
+
+
+def test_private_staff_documents_unauthorized_roles_denied(client, branches, staff_users):
+    """
+    Test 2b: Unauthorized roles (Receptionist, peer Trainers) are rejected with 403 Forbidden.
+    """
+    b1, _ = branches
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    doc_file = SimpleUploadedFile("id_card.png", b"\x89PNG\r\n\x1a\nmock id", content_type="image/png")
+    doc = StaffDocument.objects.create(
+        staff=staff,
+        title="National ID",
+        document_type=StaffDocument.DocumentType.ID_PROOF,
+        file=doc_file,
+    )
+    url = reverse("staff-document-download", kwargs={"document_id": doc.pk})
+
+    # Receptionist denied
+    client.force_login(staff_users["receptionist"])
+    resp = client.get(url)
+    assert resp.status_code == 403
+
+    # Peer trainer denied
+    u_other = User.objects.create_user("othertrainer@agms.test", "OtherPass123!", is_staff=True)
+    from django.contrib.auth.models import Group
+    u_other.groups.add(Group.objects.get(name="Trainer"))
+    client.force_login(u_other)
+    resp_other = client.get(url)
+    assert resp_other.status_code == 403
+
+    # Audit log records unauthorized attempts
+    assert AuditEvent.objects.filter(
+        action="document_download_unauthorized",
+        metadata__employee_number=staff.employee_number,
+    ).exists()
+
+
+def test_private_staff_documents_cross_branch_denied(client, branches, staff_users):
+    """
+    Test 2c: Branch Manager of Branch 2 cannot access documents for staff at Branch 1.
+    """
+    b1, b2 = branches
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    doc_file = SimpleUploadedFile("diploma.pdf", b"%PDF-1.4 diploma", content_type="application/pdf")
+    doc = StaffDocument.objects.create(
+        staff=staff,
+        title="Diploma",
+        document_type=StaffDocument.DocumentType.CERTIFICATE,
+        file=doc_file,
+    )
+    url = reverse("staff-document-download", kwargs={"document_id": doc.pk})
+
+    mgr2 = User.objects.create_user("mgr2@agms.test", "Mgr2Pass123!", is_staff=True)
+    from django.contrib.auth.models import Group
+    mgr2.groups.add(Group.objects.get(name="Branch Manager"))
+    UserBranchAccess.objects.create(user=mgr2, branch=b2, is_active=True, is_primary=True)
+
+    client.force_login(mgr2)
+    resp = client.get(url)
+    assert resp.status_code == 403
+
+
+def test_private_staff_documents_authorized_access(client, branches, staff_users):
+    """
+    Test 2d: Staff member (self), primary Branch Manager, and Gym Owner can securely download.
+    """
+    b1, _ = branches
+    staff = StaffProfile.objects.create(user=staff_users["trainer_user"], primary_branch=b1, job_title="Trainer")
+    doc_file = SimpleUploadedFile("contract.pdf", b"%PDF-1.4 authorized contract content", content_type="application/pdf")
+    doc = StaffDocument.objects.create(
+        staff=staff,
+        title="Employment Contract",
+        document_type=StaffDocument.DocumentType.CONTRACT,
+        file=doc_file,
+    )
+    url = reverse("staff-document-download", kwargs={"document_id": doc.pk})
+
+    # 1. Staff member themselves
+    client.force_login(staff_users["trainer_user"])
+    resp_self = client.get(url)
+    assert resp_self.status_code == 200
+    assert "private" in resp_self["Cache-Control"]
+    assert "no-store" in resp_self["Cache-Control"]
+    assert resp_self["X-Content-Type-Options"] == "nosniff"
+
+    # 2. Authorized Branch Manager
+    client.force_login(staff_users["manager"])
+    resp_mgr = client.get(url)
+    assert resp_mgr.status_code == 200
+
+    # 3. Gym Owner
+    client.force_login(staff_users["owner"])
+    resp_owner = client.get(url)
+    assert resp_owner.status_code == 200
+
+
+def test_staff_termination_workflow_and_access_revocation(client, branches, staff_users, sample_member):
+    """
+    Test 4: Verify staff termination revokes user authentication, trainer privileges,
+    and branch permissions while preserving historical training/shift records.
+    """
+    b1, _ = branches
+    owner = staff_users["owner"]
+    trainer_user = staff_users["trainer_user"]
+
+    # Verify trainer can log in prior to termination
+    login_resp = client.post(reverse("admin:login"), {"username": trainer_user.email, "password": "TrainerPass12345!"})
+    assert login_resp.status_code == 302
+    assert "_auth_user_id" in client.session
+    client.post(reverse("admin:logout"))
+
+    staff = StaffProfile.objects.create(
+        user=trainer_user,
+        primary_branch=b1,
+        job_title="Fitness Trainer",
+        hire_date=date(2026, 1, 1),
+    )
+    trainer = TrainerProfile.objects.create(staff=staff, status=TrainerProfile.TrainerStatus.ACTIVE)
+
+    # Active pairing
+    assignment = TrainerMemberAssignment.objects.create(
+        trainer=trainer,
+        member=sample_member,
+        branch=b1,
+        status=TrainerMemberAssignment.AssignmentStatus.ACTIVE,
+    )
+
+    # Historical completed session
+    past_session = TrainingSession.objects.create(
+        trainer=trainer,
+        member=sample_member,
+        branch=b1,
+        session_date=date(2026, 10, 1),
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status=TrainingSession.SessionStatus.COMPLETED,
+    )
+
+    # Upcoming scheduled session
+    future_session = TrainingSession.objects.create(
+        trainer=trainer,
+        member=sample_member,
+        branch=b1,
+        session_date=date(2026, 10, 25),
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status=TrainingSession.SessionStatus.SCHEDULED,
+    )
+
+    # Upcoming scheduled shift
+    future_shift = StaffShift.objects.create(
+        staff=staff,
+        branch=b1,
+        date=date(2026, 10, 26),
+        start_time=time(8, 0),
+        end_time=time(16, 0),
+        status=StaffShift.ShiftStatus.SCHEDULED,
+    )
+
+    # Execute termination
+    terminate_staff(actor=owner, staff_profile=staff, reason="Breach of security policy")
+
+    # Assert user credentials revoked
+    trainer_user.refresh_from_db()
+    assert trainer_user.is_active is False
+    assert trainer_user.is_staff is False
+    assert trainer_user.branch_access.filter(is_active=True).count() == 0
+
+    # Login MUST fail
+    login_attempt = client.post(reverse("admin:login"), {"username": trainer_user.email, "password": "TrainerPass12345!"})
+    assert "_auth_user_id" not in client.session
+
+    # Trainer profile marked INACTIVE
+    trainer.refresh_from_db()
+    assert trainer.status == TrainerProfile.TrainerStatus.INACTIVE
+
+    # Active assignments cancelled
+    assignment.refresh_from_db()
+    assert assignment.status == TrainerMemberAssignment.AssignmentStatus.CANCELLED
+
+    # Upcoming session cancelled
+    future_session.refresh_from_db()
+    assert future_session.status == TrainingSession.SessionStatus.CANCELLED
+    assert "terminated" in future_session.cancellation_reason.lower()
+
+    # Upcoming shift cancelled
+    future_shift.refresh_from_db()
+    assert future_shift.status == StaffShift.ShiftStatus.CANCELLED
+
+    # Historical session preserved
+    past_session.refresh_from_db()
+    assert past_session.status == TrainingSession.SessionStatus.COMPLETED
+
+    # Future session booking rejected
+    with pytest.raises(ValidationError) as exc:
+        schedule_training_session(
+            actor=owner,
+            trainer=trainer,
+            member=sample_member,
+            branch=b1,
+            session_date=date(2026, 10, 28),
+            start_time=time(10, 0),
+            end_time=time(11, 0),
+        )
+    assert "not active" in str(exc.value)
+
+    # Audit event logged
+    assert AuditEvent.objects.filter(
+        action="staff_terminated",
+        metadata__employee_number=staff.employee_number,
+    ).exists()

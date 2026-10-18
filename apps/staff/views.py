@@ -2,15 +2,17 @@ from datetime import date, timedelta
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
 from apps.accounts.roles import has_role, is_owner
+from apps.branches.audit import record_event
 from apps.branches.models import Branch
 from apps.branches.services import accessible_branches
 from apps.staff.models import (
     LeaveRequest,
+    StaffDocument,
     StaffProfile,
     StaffShift,
     TrainerMemberAssignment,
@@ -22,6 +24,7 @@ from apps.staff.selectors import (
     get_staff_scheduling_metrics,
     get_trainer_metrics,
 )
+from apps.staff.services import authorize_staff_document_download
 
 
 def _resolve_staff_scope(request):
@@ -187,3 +190,57 @@ def staff_reports_view(request):
         "end_date": end_date.isoformat(),
     }
     return render(request, "admin/staff/reports.html", context)
+
+
+def download_staff_document(request, document_id):
+    """
+    Securely download a staff member's private document (contract, ID, credentials).
+    Enforces staff authentication, object-level role authorization, and branch scoping.
+    Prevents IDOR and public access to confidential staff employment files.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff or not request.user.is_active:
+        raise PermissionDenied("Authentication required.")
+
+    document = (
+        StaffDocument.objects.filter(pk=document_id)
+        .select_related("staff__primary_branch", "staff__user")
+        .first()
+    )
+    if not document or not document.file:
+        raise Http404("Document not found.")
+
+    # Call service authorization
+    try:
+        authorize_staff_document_download(request.user, document)
+    except PermissionDenied as e:
+        record_event(
+            request.user,
+            "document_download_unauthorized",
+            document,
+            {
+                "employee_number": document.staff.employee_number,
+                "reason": "unauthorized_staff_document_access",
+            },
+        )
+        raise e
+
+    try:
+        file_handle = document.file.open("rb")
+    except (FileNotFoundError, ValueError):
+        raise Http404("Document file missing from private storage.")
+
+    record_event(
+        request.user,
+        "staff_document_downloaded",
+        document,
+        {
+            "employee_number": document.staff.employee_number,
+            "document_type": document.document_type,
+        },
+    )
+
+    filename = document.file.name.split("/")[-1]
+    response = FileResponse(file_handle, as_attachment=True, filename=filename)
+    response["Cache-Control"] = "private, no-store, must-revalidate"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
