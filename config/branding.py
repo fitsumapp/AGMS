@@ -231,6 +231,18 @@ def can_see_expense_approvals(request):
     from apps.accounts.roles import has_role
     return has_role(request.user, "Branch Manager")
 
+def can_see_pos(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.inventory.permissions import can_operate_pos
+    return can_operate_pos(request.user)
+
+def can_see_inventory(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.inventory.permissions import can_manage_inventory, can_view_inventory_reports, can_operate_pos
+    return can_manage_inventory(request.user) or can_view_inventory_reports(request.user) or can_operate_pos(request.user)
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -339,6 +351,20 @@ def unfold_config():
                 {"title": "Account Transfers", "icon": "swap_horiz", "link": reverse_lazy("admin:finance_accounttransfer_changelist"), "permission": can_see_finance},
                 {"title": "Reconciliation", "icon": "fact_check", "link": reverse_lazy("admin:finance_financialreconciliation_changelist"), "permission": can_see_finance},
                 {"title": "Financial Reports", "icon": "summarize", "link": format_lazy("{}?category=financial", reverse_lazy("analytics-reports")), "permission": can_see_finance},
+            ]},
+            {"title": "POS & Inventory", "items": [
+                {"title": "POS Checkout", "icon": "point_of_sale", "link": reverse_lazy("pos-checkout"), "permission": can_see_pos},
+                {"title": "Sales History", "icon": "receipt_long", "link": reverse_lazy("admin:inventory_sale_changelist"), "permission": can_see_pos},
+                {"title": "Products", "icon": "inventory_2", "link": reverse_lazy("admin:inventory_product_changelist"), "permission": can_see_inventory},
+                {"title": "Product Categories", "icon": "category", "link": reverse_lazy("admin:inventory_productcategory_changelist"), "permission": can_see_inventory},
+                {"title": "Stock Overview", "icon": "warehouse", "link": reverse_lazy("admin:inventory_stockitem_changelist"), "permission": can_see_inventory},
+                {"title": "Stock Movements", "icon": "history", "link": reverse_lazy("admin:inventory_stockmovement_changelist"), "permission": can_see_inventory},
+                {"title": "Purchase Orders", "icon": "shopping_bag", "link": reverse_lazy("admin:inventory_purchaseorder_changelist"), "permission": can_see_inventory},
+                {"title": "Goods Received", "icon": "inventory", "link": reverse_lazy("admin:inventory_goodsreceivednote_changelist"), "permission": can_see_inventory},
+                {"title": "Stock Transfers", "icon": "swap_horiz", "link": reverse_lazy("admin:inventory_stocktransfer_changelist"), "permission": can_see_inventory},
+                {"title": "Stock Adjustments", "icon": "tune", "link": reverse_lazy("admin:inventory_stockadjustment_changelist"), "permission": can_see_inventory},
+                {"title": "Stock Counts", "icon": "fact_check", "link": reverse_lazy("admin:inventory_stockcount_changelist"), "permission": can_see_inventory},
+                {"title": "Sales & Inventory Reports", "icon": "summarize", "link": reverse_lazy("pos-reports"), "permission": can_see_inventory},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

@@ -28,6 +28,10 @@ def test_all_admins_use_unfold():
         "finance.AccountTransfer", "finance.AccountAdjustment",
         "finance.FinancialReconciliation", "finance.FinanceAuditEvent",
         "finance.BillingSettlementBatch",
+        "inventory.ProductCategory", "inventory.Product", "inventory.StockItem",
+        "inventory.StockMovement", "inventory.PurchaseOrder", "inventory.GoodsReceivedNote",
+        "inventory.StockTransfer", "inventory.StockAdjustment", "inventory.StockCount",
+        "inventory.CashierShift", "inventory.Sale", "inventory.PosSettlementBatch",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

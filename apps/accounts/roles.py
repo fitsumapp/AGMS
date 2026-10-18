@@ -68,6 +68,33 @@ ROLE_PERMISSIONS = {
             "add_financialreconciliation", "change_financialreconciliation", "delete_financialreconciliation", "view_financialreconciliation",
             "view_financeauditevent",
         },
+        "inventory": {
+            "add_productcategory", "change_productcategory", "delete_productcategory", "view_productcategory",
+            "add_product", "change_product", "delete_product", "view_product",
+            "add_stockitem", "change_stockitem", "delete_stockitem", "view_stockitem",
+            "add_stockbatch", "change_stockbatch", "delete_stockbatch", "view_stockbatch",
+            "add_stockmovement", "change_stockmovement", "delete_stockmovement", "view_stockmovement",
+            "add_purchaseorder", "change_purchaseorder", "delete_purchaseorder", "view_purchaseorder",
+            "add_purchaseorderitem", "change_purchaseorderitem", "delete_purchaseorderitem", "view_purchaseorderitem",
+            "add_goodsreceivednote", "change_goodsreceivednote", "delete_goodsreceivednote", "view_goodsreceivednote",
+            "add_goodsreceiveditem", "change_goodsreceiveditem", "delete_goodsreceiveditem", "view_goodsreceiveditem",
+            "add_stocktransfer", "change_stocktransfer", "delete_stocktransfer", "view_stocktransfer",
+            "add_stocktransferitem", "change_stocktransferitem", "delete_stocktransferitem", "view_stocktransferitem",
+            "add_stockadjustment", "change_stockadjustment", "delete_stockadjustment", "view_stockadjustment",
+            "add_stockadjustmentitem", "change_stockadjustmentitem", "delete_stockadjustmentitem", "view_stockadjustmentitem",
+            "add_stockcount", "change_stockcount", "delete_stockcount", "view_stockcount",
+            "add_stockcountitem", "change_stockcountitem", "delete_stockcountitem", "view_stockcountitem",
+            "add_cashiershift", "change_cashiershift", "delete_cashiershift", "view_cashiershift",
+            "add_sale", "change_sale", "delete_sale", "view_sale",
+            "add_saleitem", "change_saleitem", "delete_saleitem", "view_saleitem",
+            "add_salepayment", "change_salepayment", "delete_salepayment", "view_salepayment",
+            "add_salereceipt", "change_salereceipt", "delete_salereceipt", "view_salereceipt",
+            "add_salereturn", "change_salereturn", "delete_salereturn", "view_salereturn",
+            "add_salereturnitem", "change_salereturnitem", "delete_salereturnitem", "view_salereturnitem",
+            "add_possettlementbatch", "change_possettlementbatch", "delete_possettlementbatch", "view_possettlementbatch",
+            "add_possettledpayment", "change_possettledpayment", "delete_possettledpayment", "view_possettledpayment",
+            "add_possettledreturn", "change_possettledreturn", "delete_possettledreturn", "view_possettledreturn",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -124,6 +151,19 @@ ROLE_PERMISSIONS = {
             "add_accounttransfer", "view_accounttransfer",
             "add_financialreconciliation", "change_financialreconciliation", "view_financialreconciliation",
         },
+        "inventory": {
+            "view_productcategory", "add_product", "change_product", "view_product",
+            "view_stockitem", "change_stockitem", "view_stockbatch", "change_stockbatch", "view_stockmovement",
+            "add_purchaseorder", "change_purchaseorder", "view_purchaseorder", "add_purchaseorderitem", "change_purchaseorderitem", "view_purchaseorderitem",
+            "add_goodsreceivednote", "view_goodsreceivednote", "add_goodsreceiveditem", "view_goodsreceiveditem",
+            "add_stocktransfer", "change_stocktransfer", "view_stocktransfer", "add_stocktransferitem", "change_stocktransferitem", "view_stocktransferitem",
+            "add_stockadjustment", "change_stockadjustment", "view_stockadjustment", "add_stockadjustmentitem", "change_stockadjustmentitem", "view_stockadjustmentitem",
+            "add_stockcount", "change_stockcount", "view_stockcount", "add_stockcountitem", "change_stockcountitem", "view_stockcountitem",
+            "add_cashiershift", "change_cashiershift", "view_cashiershift",
+            "add_sale", "change_sale", "view_sale", "add_saleitem", "change_saleitem", "view_saleitem", "add_salepayment", "view_salepayment", "view_salereceipt",
+            "add_salereturn", "change_salereturn", "view_salereturn", "add_salereturnitem", "view_salereturnitem",
+            "add_possettlementbatch", "view_possettlementbatch",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -166,6 +206,12 @@ ROLE_PERMISSIONS = {
         },
         "finance": {
             "add_expense", "view_expense",
+        },
+        "inventory": {
+            "view_productcategory", "view_product", "view_stockitem",
+            "add_cashiershift", "change_cashiershift", "view_cashiershift",
+            "add_sale", "view_sale", "add_saleitem", "view_saleitem",
+            "add_salepayment", "view_salepayment", "view_salereceipt",
         },
     },
     "Accountant": {
@@ -210,6 +256,14 @@ ROLE_PERMISSIONS = {
             "add_financialreconciliation", "change_financialreconciliation", "view_financialreconciliation",
             "view_financeauditevent",
         },
+        "inventory": {
+            "view_productcategory", "view_product", "view_stockitem", "view_stockmovement",
+            "view_purchaseorder", "view_purchaseorderitem", "view_goodsreceivednote", "view_goodsreceiveditem",
+            "view_stocktransfer", "view_stockadjustment", "view_stockcount", "view_cashiershift",
+            "view_sale", "view_saleitem", "view_salepayment", "view_salereceipt",
+            "add_salereturn", "change_salereturn", "view_salereturn", "add_salereturnitem", "view_salereturnitem",
+            "add_possettlementbatch", "change_possettlementbatch", "view_possettlementbatch",
+        },
     },
     "Trainer": {
         "branches": {"view_branch"},
@@ -222,7 +276,15 @@ ROLE_PERMISSIONS = {
             "add_leaverequest", "view_leaverequest",
         },
     },
-    "POS Staff": {"branches": {"view_branch"}},
+    "POS Staff": {
+        "branches": {"view_branch"},
+        "inventory": {
+            "view_productcategory", "view_product", "view_stockitem",
+            "add_cashiershift", "change_cashiershift", "view_cashiershift",
+            "add_sale", "change_sale", "view_sale", "add_saleitem", "view_saleitem",
+            "add_salepayment", "view_salepayment", "view_salereceipt", "view_salereturn",
+        },
+    },
 }
 
 

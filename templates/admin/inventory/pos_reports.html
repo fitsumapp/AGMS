@@ -1,0 +1,164 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600">table_chart</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          Sales & Inventory Reports Center
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        Operational retail sales, stock movement audit trails, and inventory valuations.
+      </p>
+    </div>
+
+    <!-- Export Action -->
+    <div class="flex items-center gap-2">
+      <a
+        href="?{{ request.GET.urlencode }}&export=csv"
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5"
+      >
+        <span class="material-symbols-outlined text-sm">download</span>
+        Export to CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Overview Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Gross Sales</span>
+      <p class="text-lg font-extrabold text-font-important-light dark:text-font-important-dark mt-1 font-mono">
+        {{ kpis.gross_sales|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">{{ kpis.sales_count }} sales completed</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Total Discounts</span>
+      <p class="text-lg font-extrabold text-red-600 mt-1 font-mono">
+        -{{ kpis.discounts|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">Promotions & markdowns</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Customer Refunds</span>
+      <p class="text-lg font-extrabold text-amber-600 mt-1 font-mono">
+        -{{ kpis.refunds_total|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">{{ kpis.returns_count }} returns processed</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Net Collections</span>
+      <p class="text-lg font-extrabold text-teal-700 dark:text-teal-400 mt-1 font-mono">
+        {{ kpis.net_collections|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">Cash & digital collections</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs col-span-2 md:col-span-1">
+      <span class="text-[10px] font-bold text-subtle uppercase">Stock Valuation</span>
+      <p class="text-lg font-extrabold text-indigo-700 dark:text-indigo-400 mt-1 font-mono">
+        {{ kpis.inventory_valuation|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">{{ kpis.low_stock_count }} low-stock items</p>
+    </div>
+  </div>
+
+  <!-- Filter & Report Selector Panel -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+    <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+
+      <div>
+        <label class="block text-xs font-semibold text-subtle mb-1">Report Type:</label>
+        <select name="report_type" class="w-full text-xs p-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark font-semibold">
+          <option value="daily_sales" {% if report_type == "daily_sales" %}selected{% endif %}>Daily Sales Summary</option>
+          <option value="sales_by_product" {% if report_type == "sales_by_product" %}selected{% endif %}>Sales by Product (COGS & Profit)</option>
+          <option value="inventory_valuation" {% if report_type == "inventory_valuation" %}selected{% endif %}>Inventory Valuation (Weighted Avg)</option>
+          <option value="low_stock" {% if report_type == "low_stock" %}selected{% endif %}>Low Stock & Reorder Alerts</option>
+          <option value="expiring_products" {% if report_type == "expiring_products" %}selected{% endif %}>Expiring Products (60 Days)</option>
+          <option value="stock_movements" {% if report_type == "stock_movements" %}selected{% endif %}>Stock Movements Audit Ledger</option>
+          <option value="cashier_performance" {% if report_type == "cashier_performance" %}selected{% endif %}>Cashier Shifts & Variances</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-subtle mb-1">Branch Scope:</label>
+        <select name="branch_id" class="w-full text-xs p-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark">
+          <option value="">All Accessible Branches</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {% if selected_branch and selected_branch.id == b.id %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-subtle mb-1">Date Period:</label>
+        <select name="period" class="w-full text-xs p-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark">
+          <option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
+          <option value="7d" {% if period == "7d" %}selected{% endif %}>Last 7 Days</option>
+          <option value="30d" {% if period == "30d" %}selected{% endif %}>Last 30 Days</option>
+          <option value="this_month" {% if period == "this_month" %}selected{% endif %}>This Month</option>
+          <option value="last_month" {% if period == "last_month" %}selected{% endif %}>Last Month</option>
+        </select>
+      </div>
+
+      <div>
+        <button type="submit" class="w-full py-2 bg-base-100 dark:bg-base-800 hover:bg-base-200 dark:hover:bg-base-700 border border-base-300 dark:border-base-700 text-xs font-bold rounded-lg transition">
+          Filter Report
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Data Table Panel -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs overflow-hidden">
+    <div class="p-4 border-b border-base-200 dark:border-base-800 flex items-center justify-between">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-subtle">
+        Report Results ({{ data_rows|length }} records)
+      </h3>
+      <span class="text-[11px] text-subtle font-mono">
+        Period: {{ date_range.start_date|date:"Y-m-d" }} to {{ date_range.end_date|date:"Y-m-d" }}
+      </span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-base-50 dark:bg-base-800/50 text-[10px] text-subtle uppercase border-b border-base-200 dark:border-base-800">
+          <tr>
+            {% for h in headers %}
+            <th class="py-2.5 px-4 font-bold">{{ h|title }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-base-100 dark:divide-base-800/40">
+          {% for row in data_rows %}
+          <tr class="hover:bg-base-50/50 dark:hover:bg-base-800/30 transition">
+            {% for key, val in row.items %}
+            <td class="py-2.5 px-4 font-medium text-font-important-light dark:text-font-important-dark">
+              {{ val }}
+            </td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="{{ headers|length|default:6 }}" class="py-12 text-center text-subtle text-xs">
+              No transaction or inventory records found for the selected filters.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

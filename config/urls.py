@@ -22,6 +22,12 @@ from apps.finance.views import (
     download_expense_receipt,
     download_payment_attachment,
 )
+from apps.inventory.views import (
+    pos_checkout_view,
+    pos_product_lookup_view,
+    pos_receipt_view,
+    pos_reports_view,
+)
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="admin:index", permanent=False)),
@@ -42,5 +48,9 @@ urlpatterns = [
     path("admin/finance/overview/", admin.site.admin_view(financial_overview_view), name="finance-overview"),
     path("admin/finance/expenses/<uuid:expense_id>/receipt/", download_expense_receipt, name="expense-receipt-download"),
     path("admin/finance/payments/<uuid:payment_id>/attachment/", download_payment_attachment, name="payment-attachment-download"),
+    path("admin/pos/checkout/", admin.site.admin_view(pos_checkout_view), name="pos-checkout"),
+    path("admin/pos/api/lookup/", admin.site.admin_view(pos_product_lookup_view), name="pos-product-lookup"),
+    path("admin/pos/receipt/<uuid:sale_id>/", admin.site.admin_view(pos_receipt_view), name="pos-receipt"),
+    path("admin/pos/reports/", admin.site.admin_view(pos_reports_view), name="pos-reports"),
     path("admin/", admin.site.urls),
 ]

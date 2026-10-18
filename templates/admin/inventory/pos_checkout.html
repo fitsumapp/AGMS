@@ -1,0 +1,532 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-4 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header & Branch / Shift Status Bar -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600">point_of_sale</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          POS Checkout Terminal
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        Keyboard-wedge barcode scanner ready. Scan barcode or type product name/SKU.
+      </p>
+    </div>
+
+    <!-- Shift & Branch Controls -->
+    <div class="flex flex-wrap items-center gap-3">
+      <form method="get" class="flex items-center gap-2">
+        <label class="text-xs font-semibold text-subtle">Branch:</label>
+        <select name="branch_id" onchange="this.form.submit()" class="text-xs py-1.5 px-3 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark">
+          {% for b in branches %}
+          <option value="{{ b.id }}" {% if b.id == active_branch.id %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+          {% endfor %}
+        </select>
+      </form>
+
+      {% if active_shift %}
+      <div class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1.5 rounded-lg text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-semibold text-emerald-800 dark:text-emerald-300">Shift {{ active_shift.shift_number }} Open</span>
+        <button type="button" onclick="document.getElementById('close-shift-modal').classList.remove('hidden')" class="ml-2 underline text-emerald-700 dark:text-emerald-400 font-bold hover:text-emerald-900">
+          Close Shift
+        </button>
+      </div>
+      {% else %}
+      <div class="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 px-3 py-1.5 rounded-lg text-xs">
+        <span class="font-semibold text-amber-800 dark:text-amber-300">No Open Shift</span>
+        <button type="button" onclick="document.getElementById('open-shift-modal').classList.remove('hidden')" class="ml-2 px-2.5 py-1 bg-amber-600 text-white font-bold rounded hover:bg-amber-700 transition">
+          Open Shift
+        </button>
+      </div>
+      {% endif %}
+
+      <a href="{% url 'admin:inventory_sale_changelist' %}" class="text-xs py-1.5 px-3 bg-base-100 dark:bg-base-800 border border-base-300 dark:border-base-700 rounded-lg hover:bg-base-200 dark:hover:bg-base-700 transition flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">history</span> Sales History
+      </a>
+    </div>
+  </div>
+
+  {% if not active_shift %}
+  <!-- Warning when shift is not open -->
+  <div class="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 text-sm flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-amber-600">warning</span>
+      <span>A cashier shift must be opened with an initial cash float before processing retail sales.</span>
+    </div>
+    <button type="button" onclick="document.getElementById('open-shift-modal').classList.remove('hidden')" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-xs transition">
+      Open Shift Now
+    </button>
+  </div>
+  {% endif %}
+
+  <!-- Main POS Grid: Left catalog, Right Cart -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT: Product Search & Quick Grid (7 cols) -->
+    <div class="lg:col-span-7 space-y-4">
+
+      <!-- Barcode / Search Box -->
+      <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-2.5 text-subtle">barcode_scanner</span>
+          <input
+            type="text"
+            id="barcode-input"
+            autofocus
+            placeholder="Scan barcode or type product name / SKU (Press Enter)..."
+            class="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-base-300 dark:border-base-700 bg-base-50 dark:bg-base-800 focus:bg-white dark:focus:bg-base-900 focus:ring-2 focus:ring-teal-500 outline-none text-font-important-light dark:text-font-important-dark"
+          />
+        </div>
+        <p class="text-[11px] text-subtle mt-1.5 flex items-center gap-1">
+          <span class="material-symbols-outlined text-[13px] text-teal-600">info</span>
+          Hardware scanners trigger automatic addition to cart on newline/return.
+        </p>
+      </div>
+
+      <!-- Catalog Grid -->
+      <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-subtle mb-3">
+          Available Products ({{ products|length }})
+        </h2>
+
+        <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[520px] overflow-y-auto pr-1">
+          {% for p in products %}
+          <div
+            onclick="addToCart('{{ p.id }}', '{{ p.name|escapejs }}', '{{ p.sku|escapejs }}', {{ p.price }}, {{ p.stock }})"
+            class="p-3 border rounded-xl cursor-pointer transition flex flex-col justify-between select-none
+                   {% if p.in_stock %}
+                     border-base-200 dark:border-base-800 hover:border-teal-500 hover:shadow-xs bg-white dark:bg-base-800/50
+                   {% else %}
+                     border-red-200 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/10 opacity-60 cursor-not-allowed
+                   {% endif %}"
+          >
+            <div>
+              <span class="text-[10px] font-semibold text-subtle uppercase">{{ p.category }}</span>
+              <p class="text-xs font-bold text-font-important-light dark:text-font-important-dark line-clamp-2 mt-0.5">
+                {{ p.name }}
+              </p>
+              <p class="text-[11px] text-subtle font-mono mt-0.5">{{ p.sku }}</p>
+            </div>
+
+            <div class="mt-3 pt-2 border-t border-base-100 dark:border-base-800/80 flex items-center justify-between">
+              <span class="text-xs font-extrabold text-teal-700 dark:text-teal-400">
+                {{ p.price|floatformat:2 }} ETB
+              </span>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded
+                     {% if p.stock > 5 %}bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300
+                     {% elif p.stock > 0 %}bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300
+                     {% else %}bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300{% endif %}">
+                {{ p.stock }} in stock
+              </span>
+            </div>
+          </div>
+          {% empty %}
+          <div class="col-span-3 py-12 text-center text-subtle text-xs">
+            No products found for this branch. Create retail products in the Product Catalog.
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Active Cart & Checkout Panel (5 cols) -->
+    <div class="lg:col-span-5">
+      <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-5 rounded-xl shadow-xs flex flex-col justify-between min-h-[620px]">
+
+        <!-- Cart Header -->
+        <div>
+          <div class="flex items-center justify-between border-b border-base-200 dark:border-base-800 pb-3 mb-3">
+            <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-teal-600 text-lg">shopping_cart</span>
+              Current Cart (<span id="cart-item-count">0</span>)
+            </h2>
+            <button type="button" onclick="clearCart()" class="text-xs text-red-600 hover:underline">
+              Clear All
+            </button>
+          </div>
+
+          <!-- Customer & Member Link -->
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <input
+              type="text"
+              id="cust-name-input"
+              placeholder="Customer Name (optional)"
+              class="text-xs px-2.5 py-1.5 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark"
+            />
+            <input
+              type="text"
+              id="cust-phone-input"
+              placeholder="Phone (optional)"
+              class="text-xs px-2.5 py-1.5 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark"
+            />
+          </div>
+
+          <!-- Cart Line Items -->
+          <div id="cart-items-container" class="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+            <div id="empty-cart-msg" class="text-center py-12 text-subtle text-xs">
+              Cart is empty. Scan an item or click a product to add.
+            </div>
+          </div>
+        </div>
+
+        <!-- Checkout Form & Totals -->
+        <form method="post" id="checkout-form" class="mt-4 pt-4 border-t border-base-200 dark:border-base-800 space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="process_sale" />
+          <input type="hidden" name="cart_data" id="form-cart-data" value="[]" />
+          <input type="hidden" name="customer_name" id="form-cust-name" value="Walk-in Customer" />
+          <input type="hidden" name="customer_phone" id="form-cust-phone" value="" />
+
+          <!-- Financial Breakdown -->
+          <div class="space-y-1.5 text-xs text-subtle">
+            <div class="flex justify-between">
+              <span>Subtotal:</span>
+              <span class="font-semibold text-font-important-light dark:text-font-important-dark" id="summary-subtotal">0.00 ETB</span>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-1">
+                Discount:
+                <input
+                  type="number"
+                  name="discount_amount"
+                  id="discount-input"
+                  min="0"
+                  step="0.01"
+                  value="0.00"
+                  oninput="updateTotals()"
+                  class="w-16 px-1.5 py-0.5 text-xs rounded border border-base-300 dark:border-base-700 text-right bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark"
+                />
+              </span>
+              <span class="text-red-600 font-semibold" id="summary-discount">-0.00 ETB</span>
+            </div>
+
+            <div class="flex justify-between text-sm font-extrabold text-font-important-light dark:text-font-important-dark pt-1.5 border-t border-base-200 dark:border-base-800">
+              <span>Total Due:</span>
+              <span class="text-teal-700 dark:text-teal-400 text-base" id="summary-total">0.00 ETB</span>
+            </div>
+          </div>
+
+          <!-- Payment Tender Selection -->
+          <div class="space-y-2 pt-2 border-t border-base-200 dark:border-base-800">
+            <label class="block text-xs font-semibold text-subtle">Payment Method:</label>
+            <div class="grid grid-cols-2 gap-2">
+              <select name="payment_method_id" id="payment-method-select" class="text-xs p-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 font-semibold text-font-important-light dark:text-font-important-dark">
+                {% for pm in payment_methods %}
+                <option value="{{ pm.id }}">{{ pm.name }} ({{ pm.get_method_type_display }})</option>
+                {% endfor %}
+              </select>
+
+              <input
+                type="text"
+                name="payment_reference"
+                placeholder="Reference # (e.g. TxID)"
+                class="text-xs px-2.5 py-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 text-font-important-light dark:text-font-important-dark"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-subtle mb-0.5">Tendered (Cash Given):</label>
+                <input
+                  type="number"
+                  name="tendered_amount"
+                  id="tendered-input"
+                  min="0"
+                  step="0.01"
+                  value="0.00"
+                  oninput="updateChange()"
+                  class="w-full text-xs px-2.5 py-2 rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 font-mono font-bold text-font-important-light dark:text-font-important-dark"
+                />
+              </div>
+
+              <div>
+                <label class="block text-[11px] text-subtle mb-0.5">Change Due:</label>
+                <input
+                  type="text"
+                  id="change-display"
+                  readonly
+                  value="0.00 ETB"
+                  class="w-full text-xs px-2.5 py-2 rounded-lg border border-base-200 dark:border-base-800 bg-base-100 dark:bg-base-800 font-mono font-bold text-emerald-700 dark:text-emerald-400"
+                />
+              </div>
+            </div>
+            <input type="hidden" name="paid_amount" id="form-paid-amount" value="0.00" />
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            id="checkout-btn"
+            disabled
+            class="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined text-lg">check_circle</span>
+            Complete Sale
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal: Open Shift -->
+<div id="open-shift-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+    <h3 class="text-base font-bold text-font-important-light dark:text-font-important-dark mb-1">
+      Open Cashier Shift
+    </h3>
+    <p class="text-xs text-subtle mb-4">
+      Enter the starting cash float physically in the cash drawer for branch <strong>{{ active_branch.name }}</strong>.
+    </p>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="open_shift" />
+      <div>
+        <label class="block text-xs font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Opening Cash Float (ETB):
+        </label>
+        <input
+          type="number"
+          name="opening_float"
+          step="0.01"
+          min="0"
+          value="0.00"
+          required
+          class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 font-mono font-bold"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Notes:
+        </label>
+        <textarea name="notes" rows="2" class="w-full px-3 py-2 text-xs rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800"></textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('open-shift-modal').classList.add('hidden')" class="px-4 py-2 text-xs rounded-lg border border-base-300 dark:border-base-700 hover:bg-base-100">
+          Cancel
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow-xs">
+          Open Shift
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Close Shift -->
+<div id="close-shift-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+    <h3 class="text-base font-bold text-font-important-light dark:text-font-important-dark mb-1">
+      Close Cashier Shift
+    </h3>
+    <p class="text-xs text-subtle mb-4">
+      Count all physical cash currently in the drawer and declare the count below.
+    </p>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="close_shift" />
+      <div>
+        <label class="block text-xs font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Declared Cash Count (ETB):
+        </label>
+        <input
+          type="number"
+          name="declared_cash"
+          step="0.01"
+          min="0"
+          value="0.00"
+          required
+          class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800 font-mono font-bold"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold mb-1 text-font-important-light dark:text-font-important-dark">
+          Shift Handover Notes:
+        </label>
+        <textarea name="notes" rows="2" class="w-full px-3 py-2 text-xs rounded-lg border border-base-300 dark:border-base-700 bg-white dark:bg-base-800"></textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('close-shift-modal').classList.add('hidden')" class="px-4 py-2 text-xs rounded-lg border border-base-300 dark:border-base-700 hover:bg-base-100">
+          Cancel
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-xs">
+          Confirm Close Shift
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let cart = [];
+
+function addToCart(productId, name, sku, price, maxStock) {
+  if (maxStock <= 0) {
+    alert("This product is currently out of stock.");
+    return;
+  }
+  const existing = cart.find(item => item.product_id === productId);
+  if (existing) {
+    if (existing.quantity + 1 > maxStock) {
+      alert("Cannot add more than available stock (" + maxStock + ").");
+      return;
+    }
+    existing.quantity += 1;
+  } else {
+    cart.push({
+      product_id: productId,
+      name: name,
+      sku: sku,
+      unit_price: price,
+      quantity: 1,
+      max_stock: maxStock
+    });
+  }
+  renderCart();
+}
+
+function updateQuantity(productId, delta) {
+  const item = cart.find(i => i.product_id === productId);
+  if (!item) return;
+  const newQty = item.quantity + delta;
+  if (newQty <= 0) {
+    removeFromCart(productId);
+  } else if (newQty > item.max_stock) {
+    alert("Cannot exceed available stock of " + item.max_stock);
+  } else {
+    item.quantity = newQty;
+    renderCart();
+  }
+}
+
+function removeFromCart(productId) {
+  cart = cart.filter(i => i.product_id !== productId);
+  renderCart();
+}
+
+function clearCart() {
+  cart = [];
+  renderCart();
+}
+
+function renderCart() {
+  const container = document.getElementById("cart-items-container");
+  const emptyMsg = document.getElementById("empty-cart-msg");
+  const countSpan = document.getElementById("cart-item-count");
+  const checkoutBtn = document.getElementById("checkout-btn");
+
+  let totalItems = 0;
+  cart.forEach(i => totalItems += i.quantity);
+  countSpan.innerText = totalItems;
+
+  if (cart.length === 0) {
+    container.innerHTML = '<div id="empty-cart-msg" class="text-center py-12 text-subtle text-xs">Cart is empty. Scan an item or click a product to add.</div>';
+    checkoutBtn.disabled = true;
+    updateTotals();
+    return;
+  }
+
+  let html = "";
+  cart.forEach(item => {
+    const lineTotal = (item.quantity * item.unit_price).toFixed(2);
+    html += `
+      <div class="flex items-center justify-between p-2 rounded-lg bg-base-50 dark:bg-base-800/40 border border-base-200 dark:border-base-800 text-xs">
+        <div class="flex-1 pr-2">
+          <p class="font-bold text-font-important-light dark:text-font-important-dark">${item.name}</p>
+          <p class="text-[10px] text-subtle font-mono">${item.sku} &bull; ${item.unit_price.toFixed(2)} ETB</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="updateQuantity('${item.product_id}', -1)" class="w-6 h-6 rounded bg-base-200 dark:bg-base-700 flex items-center justify-center font-bold hover:bg-base-300">-</button>
+          <span class="w-6 text-center font-bold font-mono">${item.quantity}</span>
+          <button type="button" onclick="updateQuantity('${item.product_id}', 1)" class="w-6 h-6 rounded bg-base-200 dark:bg-base-700 flex items-center justify-center font-bold hover:bg-base-300">+</button>
+        </div>
+        <div class="w-20 text-right font-bold text-teal-700 dark:text-teal-400 font-mono">
+          ${lineTotal} ETB
+        </div>
+        <button type="button" onclick="removeFromCart('${item.product_id}')" class="ml-2 text-subtle hover:text-red-600">
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  checkoutBtn.disabled = false;
+  updateTotals();
+}
+
+function updateTotals() {
+  let subtotal = 0;
+  cart.forEach(i => subtotal += (i.quantity * i.unit_price));
+  const discountInput = document.getElementById("discount-input");
+  let discount = parseFloat(discountInput.value) || 0;
+  if (discount > subtotal) discount = subtotal;
+
+  const total = Math.max(0, subtotal - discount);
+
+  document.getElementById("summary-subtotal").innerText = subtotal.toFixed(2) + " ETB";
+  document.getElementById("summary-discount").innerText = "-" + discount.toFixed(2) + " ETB";
+  document.getElementById("summary-total").innerText = total.toFixed(2) + " ETB";
+
+  const tenderedInput = document.getElementById("tendered-input");
+  if (parseFloat(tenderedInput.value) < total || parseFloat(tenderedInput.value) === 0) {
+    tenderedInput.value = total.toFixed(2);
+  }
+  document.getElementById("form-paid-amount").value = total.toFixed(2);
+  updateChange();
+
+  // Populate hidden form fields
+  document.getElementById("form-cart-data").value = JSON.stringify(cart);
+  document.getElementById("form-cust-name").value = document.getElementById("cust-name-input").value || "Walk-in Customer";
+  document.getElementById("form-cust-phone").value = document.getElementById("cust-phone-input").value || "";
+}
+
+function updateChange() {
+  let subtotal = 0;
+  cart.forEach(i => subtotal += (i.quantity * i.unit_price));
+  const discount = parseFloat(document.getElementById("discount-input").value) || 0;
+  const total = Math.max(0, subtotal - discount);
+  const tendered = parseFloat(document.getElementById("tendered-input").value) || 0;
+  const change = Math.max(0, tendered - total);
+  document.getElementById("change-display").value = change.toFixed(2) + " ETB";
+}
+
+// Barcode scanner listener
+document.getElementById("barcode-input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const query = this.value.trim();
+    if (!query) return;
+
+    fetch("{% url 'pos-product-lookup' %}?branch_id={{ active_branch.id }}&q=" + encodeURIComponent(query))
+      .then(res => res.json())
+      .then(data => {
+        if (data.products && data.products.length > 0) {
+          const match = data.products[0];
+          addToCart(match.id, match.name, match.sku, match.price, match.stock);
+          document.getElementById("barcode-input").value = "";
+        } else {
+          alert("Product not found for: " + query);
+        }
+      })
+      .catch(err => console.error("Error looking up barcode:", err));
+  }
+});
+</script>
+{% endblock %}

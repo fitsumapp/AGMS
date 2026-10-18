@@ -1,0 +1,142 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-md mx-auto py-8 px-4">
+
+  <!-- Action Bar -->
+  <div class="flex items-center justify-between mb-4 no-print">
+    <a href="{% url 'pos-checkout' %}?branch_id={{ sale.branch.id }}" class="text-xs text-subtle hover:underline flex items-center gap-1">
+      <span class="material-symbols-outlined text-sm">arrow_back</span> Return to POS
+    </a>
+    <button onclick="window.print()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg text-xs shadow-xs transition flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-sm">print</span> Print Receipt
+    </button>
+  </div>
+
+  <!-- Thermal Receipt Paper Card -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-6 rounded-2xl shadow-md font-mono text-xs text-font-important-light dark:text-font-important-dark space-y-4">
+
+    <!-- Store Header -->
+    <div class="text-center space-y-1 border-b border-dashed border-base-300 dark:border-base-700 pb-4">
+      <h2 class="text-base font-extrabold uppercase tracking-wider">
+        {{ sale.branch.name }}
+      </h2>
+      <p class="text-[11px] text-subtle">Branch Code: {{ sale.branch.code }}</p>
+      {% if sale.branch.phone %}
+      <p class="text-[11px] text-subtle">Tel: {{ sale.branch.phone }}</p>
+      {% endif %}
+      <p class="text-[10px] text-subtle uppercase pt-1 tracking-widest font-sans font-bold">
+        Retail Sales Receipt
+      </p>
+    </div>
+
+    <!-- Meta Details -->
+    <div class="space-y-1 text-[11px] border-b border-dashed border-base-300 dark:border-base-700 pb-3">
+      <div class="flex justify-between">
+        <span class="text-subtle">Receipt #:</span>
+        <span class="font-bold">{{ receipt.receipt_number|default:sale.sale_number }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-subtle">Date & Time:</span>
+        <span>{{ sale.completed_at|date:"Y-m-d H:i:s" }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-subtle">Cashier:</span>
+        <span>{{ sale.cashier.get_full_name|default:sale.cashier.username }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-subtle">Customer:</span>
+        <span class="font-bold">{{ sale.customer_name }}</span>
+      </div>
+    </div>
+
+    <!-- Line Items Table -->
+    <div class="border-b border-dashed border-base-300 dark:border-base-700 pb-3">
+      <table class="w-full text-left">
+        <thead>
+          <tr class="text-[10px] text-subtle uppercase border-b border-base-200 dark:border-base-800">
+            <th class="py-1">Item</th>
+            <th class="py-1 text-center">Qty</th>
+            <th class="py-1 text-right">Price</th>
+            <th class="py-1 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-base-100 dark:divide-base-800/40 text-[11px]">
+          {% for item in items %}
+          <tr>
+            <td class="py-1.5 pr-1 font-bold">{{ item.product.name }}</td>
+            <td class="py-1.5 text-center">{{ item.quantity }}</td>
+            <td class="py-1.5 text-right">{{ item.unit_price|floatformat:2 }}</td>
+            <td class="py-1.5 text-right font-bold">{{ item.total_price|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Financial Totals -->
+    <div class="space-y-1 text-[11px] border-b border-dashed border-base-300 dark:border-base-700 pb-3">
+      <div class="flex justify-between">
+        <span>Subtotal:</span>
+        <span>{{ sale.subtotal|floatformat:2 }} ETB</span>
+      </div>
+      {% if sale.discount_amount > 0 %}
+      <div class="flex justify-between text-red-600">
+        <span>Discount:</span>
+        <span>-{{ sale.discount_amount|floatformat:2 }} ETB</span>
+      </div>
+      {% endif %}
+      {% if sale.tax_amount > 0 %}
+      <div class="flex justify-between text-subtle">
+        <span>Tax (VAT):</span>
+        <span>{{ sale.tax_amount|floatformat:2 }} ETB</span>
+      </div>
+      {% endif %}
+      <div class="flex justify-between text-sm font-extrabold pt-1 border-t border-base-200 dark:border-base-800">
+        <span>TOTAL:</span>
+        <span>{{ sale.total_amount|floatformat:2 }} ETB</span>
+      </div>
+    </div>
+
+    <!-- Payments Tendered -->
+    <div class="space-y-1 text-[11px] border-b border-dashed border-base-300 dark:border-base-700 pb-3">
+      {% for pay in payments %}
+      <div class="flex justify-between">
+        <span class="text-subtle">Tendered ({{ pay.payment_method.name }}):</span>
+        <span>{{ pay.tendered_amount|floatformat:2 }} ETB</span>
+      </div>
+      {% if pay.reference %}
+      <div class="flex justify-between text-[10px] text-subtle">
+        <span>Ref #:</span>
+        <span>{{ pay.reference }}</span>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <div class="flex justify-between font-bold text-emerald-600 pt-1">
+        <span>Change:</span>
+        <span>{{ sale.change_amount|floatformat:2 }} ETB</span>
+      </div>
+    </div>
+
+    <!-- Footer Message -->
+    <div class="text-center text-[10px] text-subtle pt-2 space-y-1">
+      <p>Thank you for training with us!</p>
+      <p>Keep this receipt for all return & exchange requests within 7 days.</p>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@media print {
+  .no-print, header, aside, nav, footer {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+</style>
+{% endblock %}
