@@ -273,7 +273,7 @@ Dedicated test suite in `tests/test_pos_inventory.py` covers 14 scenarios:
 
 ### 19. Git Commit Hash
 - **Initial Implementation Commit:** `272d85f` (`feat: implement gym POS and inventory management`)
-- **Hardening & Verification Commit:** (Refer to Section 21.7 below)
+- **Hardening & Verification Commit:** `8b8d36d` (`feat: harden POS payment verification, purchasing concurrency, and refund integrity`)
 
 ---
 
@@ -358,6 +358,7 @@ pytest -q
 ```
 
 #### 21.7 Hardening Commit
+- **Commit Hash:** `8b8d36d`
 - **Commit Message:** `feat: harden POS payment verification, purchasing concurrency, and refund integrity`
 - **Files Changed:**
   - `apps/inventory/models.py`
