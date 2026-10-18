@@ -22,6 +22,7 @@ def test_all_admins_use_unfold():
         "analytics.ReportExportLog", "analytics.ReportPreset",
         "staff.StaffProfile", "staff.TrainerProfile", "staff.TrainerMemberAssignment",
         "staff.TrainingSession", "staff.ShiftTemplate", "staff.StaffShift", "staff.LeaveRequest",
+        "classes.ClassType", "classes.ClassScheduleTemplate", "classes.ClassSession", "classes.ClassBooking",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

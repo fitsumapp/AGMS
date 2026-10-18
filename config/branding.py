@@ -205,6 +205,18 @@ def can_see_staff_reports(request):
     from apps.staff.permissions import can_view_staff_directory
     return can_view_staff_directory(request.user)
 
+def can_see_classes(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.classes.permissions import can_manage_classes, can_book_classes, can_mark_class_attendance
+    return can_manage_classes(request.user) or can_book_classes(request.user) or can_mark_class_attendance(request.user)
+
+def can_see_class_reports(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.classes.permissions import can_view_class_reports
+    return can_view_class_reports(request.user)
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -291,6 +303,16 @@ def unfold_config():
                 {"title": "Leave Requests", "icon": "time_to_leave", "link": reverse_lazy("admin:staff_leaverequest_changelist"), "permission": can_see_leave_requests},
                 {"title": "Trainer Performance", "icon": "insights", "link": reverse_lazy("staff-performance"), "permission": can_see_trainer_performance},
                 {"title": "Staff Reports", "icon": "summarize", "link": reverse_lazy("staff-reports"), "permission": can_see_staff_reports},
+            ]},
+            {"title": "Classes & Bookings", "items": [
+                {"title": "Class Catalog", "icon": "category", "link": reverse_lazy("admin:classes_classtype_changelist"), "permission": can_see_classes},
+                {"title": "Class Schedule", "icon": "calendar_month", "link": reverse_lazy("admin:classes_classscheduletemplate_changelist"), "permission": can_see_classes},
+                {"title": "Class Sessions", "icon": "event_available", "link": reverse_lazy("admin:classes_classsession_changelist"), "permission": can_see_classes},
+                {"title": "Member Bookings", "icon": "book_online", "link": reverse_lazy("admin:classes_classbooking_changelist"), "permission": can_see_classes},
+                {"title": "Waitlist", "icon": "pending_actions", "link": format_lazy("{}?status__exact=WAITLISTED", reverse_lazy("admin:classes_classbooking_changelist")), "permission": can_see_classes},
+                {"title": "Class Attendance", "icon": "fact_check", "link": format_lazy("{}?status__in=SCHEDULED,IN_PROGRESS", reverse_lazy("admin:classes_classsession_changelist")), "permission": can_see_classes},
+                {"title": "Class Calendar", "icon": "calendar_view_week", "link": reverse_lazy("class-calendar"), "permission": can_see_classes},
+                {"title": "Class Reports", "icon": "bar_chart", "link": reverse_lazy("class-reports"), "permission": can_see_class_reports},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

@@ -65,6 +65,15 @@ class MembershipPackage(UUIDTimeStampedModel, AuditFieldMixin):
         default=2,
         help_text="Maximum number of freeze requests allowed per membership.",
     )
+    classes_included = models.BooleanField(
+        default=True,
+        help_text="Specifies if memberships of this package are eligible to book group classes.",
+    )
+    allowed_classes_per_week = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Optional weekly class booking limit. Leave blank for unlimited.",
+    )
     is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
