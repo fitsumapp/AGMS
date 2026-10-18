@@ -230,7 +230,7 @@ Execution against PostgreSQL test database:
 - **Branch:** `master`
 - **Initial Phase 10 Commit:** `604c549` (`feat: implement gym expense and financial management`)
 - **Hardening Verification Commit:** `6544615` (`feat: harden financial integrity, closed period controls and billing reconciliation`)
-- **Settlement Exactly-Once Hardening Commit:** `[PENDING_COMMIT]` (`feat: enforce exactly-once billing settlement with durable per-transaction tracking`)
+- **Settlement Exactly-Once Hardening Commit:** `30d8288` (`feat: enforce exactly-once billing settlement with durable per-transaction tracking`)
 - **Verification Status:** All 278 tests passing (254 baseline regressions + 24 Phase 10 tests), system check clean, zero pending migrations.
 
 ---
