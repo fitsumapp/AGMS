@@ -27,6 +27,7 @@ def test_all_admins_use_unfold():
         "finance.Expense", "finance.ExpensePayment", "finance.FinancialAccount",
         "finance.AccountTransfer", "finance.AccountAdjustment",
         "finance.FinancialReconciliation", "finance.FinanceAuditEvent",
+        "finance.BillingSettlementBatch",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

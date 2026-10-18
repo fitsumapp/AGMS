@@ -1082,7 +1082,7 @@ def test_billing_source_to_finance_reconciliation_and_batch_settlement(test_bran
             end_date=today,
             payment_method_type="CASH",
         )
-    assert "has already been posted" in str(exc.value)
+    assert "already been settled" in str(exc.value)
 
 
 # 22. Expense Payment Void Modes & Duplicate Prevention
@@ -1251,4 +1251,239 @@ def test_closed_period_integrity_and_backdating_rejection(test_branches, test_us
     # 8. Reopening: Owner with valid reason -> SUCCESS
     reopened = reopen_reconciliation(actor=owner, reconciliation=recon, reason="External audit adjustments required")
     assert reopened.status == FinancialReconciliation.Status.DRAFT
+
+
+# 24. Targeted Audit: Settlement Double-Posting Prevention & Concurrency Safety
+@pytest.mark.django_db(transaction=True)
+def test_settlement_double_posting_prevention_and_concurrency(test_branches, test_users, test_finance_accounts):
+    import threading
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    accountant = test_users["accountant"]
+    cash_bole = test_finance_accounts["cash_bole"]
+    today = timezone.localdate()
+    day1 = today - timezone.timedelta(days=3)
+    day2 = today - timezone.timedelta(days=2)
+    day3 = today - timezone.timedelta(days=1)
+
+    from apps.billing.models import Invoice, Payment, PaymentMethod, Refund
+    from apps.members.models import Member
+    from apps.finance.models import SettledBillingPayment, SettledBillingRefund, BillingSettlementBatch
+
+    pm_cash, _ = PaymentMethod.objects.get_or_create(
+        code="CASH_AUDIT",
+        defaults={"name": "Cash Audit", "method_type": "CASH", "is_active": True},
+    )
+
+    member = Member.objects.create(
+        member_number="MBR-AUDIT-01",
+        first_name="Haile",
+        last_name="Gebrselassie",
+        phone="+251911888888",
+        home_branch=b1,
+    )
+    inv = Invoice.objects.create(
+        invoice_number="INV-AUDIT-01",
+        member=member,
+        branch=b1,
+        issue_date=day1,
+        due_date=today,
+        subtotal=Decimal("10000.00"),
+        total_amount=Decimal("10000.00"),
+        balance_due=Decimal("0.00"),
+        paid_amount=Decimal("10000.00"),
+        status=Invoice.Status.PAID,
+    )
+
+    # Create 3 verified cash payments across days 1, 2, and 3
+    p1 = Payment.objects.create(
+        payment_number="PAY-AUDIT-01",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("1000.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.make_aware(timezone.datetime.combine(day1, timezone.datetime.min.time())),
+        idempotency_key="idemp-audit-p1",
+    )
+    p2 = Payment.objects.create(
+        payment_number="PAY-AUDIT-02",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("1000.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.make_aware(timezone.datetime.combine(day2, timezone.datetime.min.time())),
+        idempotency_key="idemp-audit-p2",
+    )
+    p3 = Payment.objects.create(
+        payment_number="PAY-AUDIT-03",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("1000.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.make_aware(timezone.datetime.combine(day3, timezone.datetime.min.time())),
+        idempotency_key="idemp-audit-p3",
+    )
+
+    init_balance = cash_bole.current_balance
+
+    # Case 1: Partially Overlapping Range 1 (Day 1 to Day 2)
+    # Settles p1 and p2 (2,000 ETB)
+    batch1 = post_verified_billing_batch_to_account(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        start_date=day1,
+        end_date=day2,
+        payment_method_type="CASH",
+    )
+    cash_bole.refresh_from_db()
+    assert batch1["payment_count"] == 2
+    assert batch1["net_collections"] == Decimal("2000.00")
+    assert cash_bole.current_balance == init_balance + Decimal("2000.00")
+    assert SettledBillingPayment.objects.filter(payment=p1).exists()
+    assert SettledBillingPayment.objects.filter(payment=p2).exists()
+    assert not SettledBillingPayment.objects.filter(payment=p3).exists()
+
+    # Case 2: Partially Overlapping Range 2 (Day 2 to Day 3)
+    # Day 2 (p2) is already settled! Must ONLY settle p3 (1,000 ETB).
+    # Must NOT double-settle p2!
+    batch2 = post_verified_billing_batch_to_account(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        start_date=day2,
+        end_date=day3,
+        payment_method_type="CASH",
+    )
+    cash_bole.refresh_from_db()
+    assert batch2["payment_count"] == 1
+    assert batch2["net_collections"] == Decimal("1000.00")
+    # Total account increase must be exactly 3,000 ETB (not 4,000 ETB!)
+    assert cash_bole.current_balance == init_balance + Decimal("3000.00")
+    assert SettledBillingPayment.objects.filter(payment=p3).exists()
+
+    # Case 3: Fully Overlapping Range with Different Boundaries (Day 1 to Day 3)
+    # All payments (p1, p2, p3) are already settled!
+    with pytest.raises(ValidationError) as exc:
+        post_verified_billing_batch_to_account(
+            actor=accountant,
+            branch=b1,
+            account=cash_bole,
+            start_date=day1,
+            end_date=day3,
+            payment_method_type="CASH",
+        )
+    assert "All transactions in this date range have already been settled" in str(exc.value)
+
+    # Case 4: Same Payment Method Across Multiple Financial Accounts
+    # Attempting to settle the same Day 1 to Day 3 into a secondary account
+    from apps.finance.models import FinancialAccount
+    petty_cash = FinancialAccount.objects.create(
+        name="Petty Cash Drawer - Bole",
+        account_type=FinancialAccount.AccountType.PETTY_CASH,
+        branch=b1,
+        opening_balance=Decimal("500.00"),
+        current_balance=Decimal("500.00"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        post_verified_billing_batch_to_account(
+            actor=accountant,
+            branch=b1,
+            account=petty_cash,
+            start_date=day1,
+            end_date=day3,
+            payment_method_type="CASH",
+        )
+    assert "All transactions in this date range have already been settled" in str(exc.value)
+    petty_cash.refresh_from_db()
+    assert petty_cash.current_balance == Decimal("500.00")
+
+    # Case 5: Late-Verified Payment & Late-Completed Refund
+    # A payment p4 and refund r1 on Day 1 were pending and now get verified/completed
+    p4 = Payment.objects.create(
+        payment_number="PAY-AUDIT-04",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("1500.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.make_aware(timezone.datetime.combine(day1, timezone.datetime.min.time())),
+        idempotency_key="idemp-audit-p4",
+    )
+    r1 = Refund.objects.create(
+        refund_number="REF-AUDIT-01",
+        payment=p1,
+        invoice=inv,
+        amount=Decimal("200.00"),
+        reason="Partial service adjustment",
+        status=Refund.Status.COMPLETED,
+        completed_at=timezone.make_aware(timezone.datetime.combine(day2, timezone.datetime.min.time())),
+    )
+
+    # Settlement for Day 1 to Day 3 now cleanly captures ONLY p4 and r1!
+    batch3 = post_verified_billing_batch_to_account(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        start_date=day1,
+        end_date=day3,
+        payment_method_type="CASH",
+    )
+    cash_bole.refresh_from_db()
+    assert batch3["payment_count"] == 1  # only p4
+    assert batch3["refund_count"] == 1   # only r1
+    assert batch3["net_collections"] == Decimal("1300.00")  # 1500 - 200
+    assert cash_bole.current_balance == init_balance + Decimal("3000.00") + Decimal("1300.00")
+    assert SettledBillingPayment.objects.filter(payment=p4).exists()
+    assert SettledBillingRefund.objects.filter(refund=r1).exists()
+
+    # Case 6: Concurrent Settlement Serialization & Double-Posting Race Safety
+    # Create new payment p5
+    p5 = Payment.objects.create(
+        payment_number="PAY-AUDIT-05",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("700.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.make_aware(timezone.datetime.combine(day3, timezone.datetime.min.time())),
+        idempotency_key="idemp-audit-p5",
+    )
+
+    results = []
+    errors = []
+
+    def worker():
+        from django.db import connection
+        try:
+            res = post_verified_billing_batch_to_account(
+                actor=accountant,
+                branch=b1,
+                account=cash_bole,
+                start_date=day3,
+                end_date=day3,
+                payment_method_type="CASH",
+            )
+            results.append(res)
+        except Exception as e:
+            errors.append(e)
+        finally:
+            connection.close()
+
+    t1 = threading.Thread(target=worker)
+    t2 = threading.Thread(target=worker)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Exactly one thread must succeed, and the other must be safely rejected
+    assert len(results) == 1
+    assert len(errors) == 1
+    # Exactly one SettledBillingPayment row for p5 must exist in the database
+    assert SettledBillingPayment.objects.filter(payment=p5).count() == 1
+
 

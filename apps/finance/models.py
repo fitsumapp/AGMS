@@ -570,6 +570,122 @@ class AccountAdjustment(UUIDTimeStampedModel):
         return f"{self.adjustment_number} — {self.get_adjustment_type_display()} {self.amount} ETB on {self.account.name}"
 
 
+class BillingSettlementBatch(UUIDTimeStampedModel):
+    """
+    Durable batch record for authoritative customer payment settlements into financial accounts.
+    Guarantees exactly-once posting and eliminates duplicate settlement risks.
+    """
+    batch_number = models.CharField(max_length=50, unique=True, db_index=True)
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.PROTECT,
+        related_name="billing_settlements",
+    )
+    financial_account = models.ForeignKey(
+        FinancialAccount,
+        on_delete=models.PROTECT,
+        related_name="billing_settlements",
+    )
+    payment_method_type = models.CharField(max_length=30, db_index=True)
+    period_start = models.DateField(db_index=True)
+    period_end = models.DateField(db_index=True)
+    payment_count = models.PositiveIntegerField(default=0)
+    total_payments = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    refund_count = models.PositiveIntegerField(default=0)
+    total_refunds = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    net_collections = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+    adjustment = models.OneToOneField(
+        AccountAdjustment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="billing_settlement_batch",
+    )
+    settled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="billing_settlement_batches",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Billing settlement batch"
+        verbose_name_plural = "Billing settlement batches"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.batch_number} — {self.branch.name} ({self.payment_method_type}: {self.net_collections} ETB)"
+
+
+class SettledBillingPayment(UUIDTimeStampedModel):
+    """
+    Per-payment tracking record with a database UNIQUE constraint on `payment`.
+    Guarantees that a billing.Payment can NEVER be settled into financial accounts more than once.
+    """
+    payment = models.OneToOneField(
+        "billing.Payment",
+        on_delete=models.PROTECT,
+        related_name="settlement_entry",
+    )
+    settlement_batch = models.ForeignKey(
+        BillingSettlementBatch,
+        on_delete=models.CASCADE,
+        related_name="settled_payments",
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    class Meta:
+        verbose_name = "Settled billing payment"
+        verbose_name_plural = "Settled billing payments"
+
+    def __str__(self):
+        return f"Settled Payment {self.payment_id} ({self.amount} ETB) in {self.settlement_batch.batch_number}"
+
+
+class SettledBillingRefund(UUIDTimeStampedModel):
+    """
+    Per-refund tracking record with a database UNIQUE constraint on `refund`.
+    Guarantees that a billing.Refund can NEVER be settled into financial accounts more than once.
+    """
+    refund = models.OneToOneField(
+        "billing.Refund",
+        on_delete=models.PROTECT,
+        related_name="settlement_entry",
+    )
+    settlement_batch = models.ForeignKey(
+        BillingSettlementBatch,
+        on_delete=models.CASCADE,
+        related_name="settled_refunds",
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    class Meta:
+        verbose_name = "Settled billing refund"
+        verbose_name_plural = "Settled billing refunds"
+
+    def __str__(self):
+        return f"Settled Refund {self.refund_id} ({self.amount} ETB) in {self.settlement_batch.batch_number}"
+
+
 class FinancialReconciliation(UUIDTimeStampedModel):
     """Daily or periodic cash and bank balance reconciliation."""
     class Status(models.TextChoices):

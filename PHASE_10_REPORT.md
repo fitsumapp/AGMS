@@ -229,27 +229,27 @@ Execution against PostgreSQL test database:
 
 - **Branch:** `master`
 - **Initial Phase 10 Commit:** `604c549` (`feat: implement gym expense and financial management`)
-- **Final Hardening Verification Commit:** `6544615` (`feat: harden financial integrity, closed period controls and billing reconciliation`)
-- **Verification Status:** All 277 tests passing (254 baseline regressions + 23 Phase 10 tests), system check clean, zero pending migrations.
+- **Hardening Verification Commit:** `6544615` (`feat: harden financial integrity, closed period controls and billing reconciliation`)
+- **Settlement Exactly-Once Hardening Commit:** `[PENDING_COMMIT]` (`feat: enforce exactly-once billing settlement with durable per-transaction tracking`)
+- **Verification Status:** All 278 tests passing (254 baseline regressions + 24 Phase 10 tests), system check clean, zero pending migrations.
 
 ---
 
 ## 15. Final Financial Integrity Verification
 
 ### 15.1 Reconciled Test Counts
-- **Total Collected & Executed:** 277 tests
-  - `tests/test_finance.py`: 23 tests (added 3 dedicated hardening tests in final verification)
+- **Total Collected & Executed:** 278 tests
+  - `tests/test_finance.py`: 24 tests (including dedicated settlement double-posting regression test)
   - Pre-existing regression suite (Phases 01–09, including `test_configuration.py`): 254 tests
-  - Result: 277 passed, 0 failed, 0 skipped, 0 deselected.
+  - Result: 278 passed, 0 failed, 0 skipped, 0 deselected.
 
 ### 15.2 Authoritative Billing-to-Finance Integration
 - **Source of Truth:** Phase 05 Billing (`billing.Payment` and `billing.Refund`) remains the sole authoritative source of truth for customer collections, invoice receipts, and member refunds.
 - **Dynamic Ledger Aggregation:** Financial Overview KPI selectors, Cash Flow Statements, and Income & Expense Reports read verified customer payments (`status=Payment.Status.VERIFIED`) and completed refunds (`status=Refund.Status.COMPLETED`) directly, eliminating parallel ledgers.
-- **Idempotent Batch Settlement Service (`post_verified_billing_batch_to_account`):**
+- **Durable Batch Settlement Service (`post_verified_billing_batch_to_account`):**
   - Enables authorized accountants and branch managers to formally post verified customer collections for a date range into a branch `FinancialAccount`.
   - Atomically calculates net collections ($\sum \text{Payments} - \sum \text{Refunds}$).
-  - Generates a deterministic batch idempotency key (`SETTLE-{branch.code}-{method_type}-{start_date}-{end_date}`) to strictly prevent duplicate batch postings.
-  - Automatically verifies that the posting date is not inside an already closed reconciliation period.
+  - Verifies that the posting date is not inside an already closed reconciliation period.
 - **Reconciliation Comparison:** In `conduct_reconciliation`, expected balance calculations automatically reconcile verified billing cash, bank transfers, and digital wallet collections against physical counts.
 
 ### 15.3 Expense Payment Void Modes & Reversal Integrity
@@ -270,4 +270,44 @@ Execution against PostgreSQL test database:
 - **Reopening Protocol (`reopen_reconciliation`):**
   - Restricted strictly to Gym Owners and Superusers.
   - Requires a mandatory justification reason and creates an immutable `RECONCILIATION_REOPENED` audit event.
+
+---
+
+## 16. Settlement Double-Posting & Concurrency Verification
+
+### 16.1 Audit Findings: Settlement Idempotency Vulnerability
+- **Inspection of Batch String Matching:**
+  - The preliminary settlement mechanism relied on looking up matching adjustment reason strings: `reason__contains=f"SETTLE-{branch.code}-{method_type}-{start_date}-{end_date}"`.
+  - **Identified Flaw:** If date ranges partially overlapped (e.g., Batch A: Oct 1–2 and Batch B: Oct 2–3), or if boundaries differed (e.g., Batch A: Oct 1–2 and Batch B: Oct 1–5), or if a different target account was selected, previously settled payments on the overlapping dates were re-summed and re-posted.
+  - **Impact:** FinancialAccount balances could be artificially inflated, and net billing collections would be credited more than once.
+
+### 16.2 Architectural Solution: Durable Per-Transaction Settlement Tracking
+To guarantee mathematical exactly-once posting under all scenarios:
+1. **`BillingSettlementBatch` Model:**
+   - Durable batch audit record storing `batch_number`, `branch`, `financial_account`, `payment_method_type`, `period_start`, `period_end`, `payment_count`, `total_payments`, `refund_count`, `total_refunds`, `net_collections`, `settled_by`, and linked `AccountAdjustment`.
+2. **`SettledBillingPayment` Model:**
+   - Child table linking each `billing.Payment` to its `BillingSettlementBatch`.
+   - Backed by `OneToOneField(Payment, on_delete=CASCADE, related_name="settlement_entry")`.
+   - **PostgreSQL Database-Level `UNIQUE` Constraint:** It is physically impossible in the database for any verified payment to belong to more than one settlement batch, date range, or financial account.
+3. **`SettledBillingRefund` Model:**
+   - Child table linking each `billing.Refund` to its `BillingSettlementBatch`.
+   - Backed by `OneToOneField(Refund, on_delete=CASCADE, related_name="settlement_entry")`.
+   - Ensures each refund deduction is recognized exactly once.
+4. **PostgreSQL Concurrency & Outer Join Lock Safety:**
+   - Candidate payments and refunds are filtered with `.exclude(id__in=SettledBillingPayment.objects.values("payment_id"))`.
+   - Pure row-level locking (`select_for_update().order_by("id")`) is executed directly on `billing_payment` and `billing_refund` tables without outer joins (avoiding PostgreSQL's `FOR UPDATE cannot be applied to nullable side of outer join` limitation).
+   - Under row lock, settled IDs are re-checked to ensure serializability under concurrent thread execution.
+
+### 16.3 Automated Regression & Stress Verification
+Covered in `tests/test_finance.py::test_settlement_double_posting_prevention_and_concurrency`:
+- **Partially Overlapping Ranges:** Batch 1 settles Day 1–2 (2,000 ETB). Batch 2 submitted for Day 2–3 settles *only* Day 3 (1,000 ETB); Day 2 payment is excluded. Total account balance increases by exactly 3,000 ETB (not 4,000 ETB).
+- **Fully Overlapping Ranges with Different Boundaries:** A subsequent settlement request for Day 1–3 finds 0 unsettled payments and aborts cleanly with `ValidationError`.
+- **Cross-Account Double-Posting Prevention:** Attempting to settle the same date range into a different `FinancialAccount` (e.g. Petty Cash) fails cleanly with `ValidationError`; petty cash balance remains untouched.
+- **Late-Verified Payments & Late-Completed Refunds:** Late-verified payments or late-completed refunds falling into past date ranges are dynamically discovered and settled in subsequent batches without duplicate posting of previously settled records.
+- **Concurrent Settlement Requests:** Two concurrent worker threads attempting to settle the same payment simultaneously serialize cleanly via PostgreSQL locks and unique database constraints: exactly one thread succeeds, and the other thread cleanly raises `ValidationError` or aborts with 0 unsettled payments.
+
+### 16.4 Unfold Admin Registration & Inspection
+- `BillingSettlementBatchAdmin` registered in Django Unfold with tabular inlines for `SettledBillingPayment` and `SettledBillingRefund`.
+- Full audit visibility into every settled customer payment and refund.
+- Updated `tests/test_configuration.py` Unfold checks (5/5 passed).
 

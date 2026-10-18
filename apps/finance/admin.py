@@ -4,13 +4,14 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
 from apps.accounts.roles import is_owner
 from .models import (
     AccountAdjustment,
     AccountTransfer,
+    BillingSettlementBatch,
     BranchFinanceSettings,
     Expense,
     ExpenseCategory,
@@ -18,6 +19,8 @@ from .models import (
     FinanceAuditEvent,
     FinancialAccount,
     FinancialReconciliation,
+    SettledBillingPayment,
+    SettledBillingRefund,
     Supplier,
 )
 from .permissions import get_user_finance_branches
@@ -439,3 +442,89 @@ class FinanceAuditEventAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class SettledBillingPaymentInline(TabularInline):
+    model = SettledBillingPayment
+    extra = 0
+    can_delete = False
+    readonly_fields = ("payment", "amount", "created_at")
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class SettledBillingRefundInline(TabularInline):
+    model = SettledBillingRefund
+    extra = 0
+    can_delete = False
+    readonly_fields = ("refund", "amount", "created_at")
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BillingSettlementBatch)
+class BillingSettlementBatchAdmin(ModelAdmin):
+    list_display = (
+        "batch_number",
+        "branch",
+        "financial_account",
+        "payment_method_type",
+        "period_start",
+        "period_end",
+        "payment_count",
+        "total_payments_display",
+        "refund_count",
+        "total_refunds_display",
+        "net_collections_display",
+        "settled_by",
+        "created_at",
+    )
+    list_filter = ("payment_method_type", "branch", "financial_account", "period_start")
+    search_fields = ("batch_number", "financial_account__name")
+    readonly_fields = (
+        "batch_number",
+        "branch",
+        "financial_account",
+        "payment_method_type",
+        "period_start",
+        "period_end",
+        "payment_count",
+        "total_payments",
+        "refund_count",
+        "total_refunds",
+        "net_collections",
+        "adjustment",
+        "settled_by",
+        "created_at",
+    )
+    inlines = [SettledBillingPaymentInline, SettledBillingRefundInline]
+
+    @display(description="Total Collections")
+    def total_payments_display(self, obj):
+        return f"{obj.total_payments:,.2f} ETB"
+
+    @display(description="Total Refunds")
+    def total_refunds_display(self, obj):
+        return f"{obj.total_refunds:,.2f} ETB"
+
+    @display(description="Net Settled")
+    def net_collections_display(self, obj):
+        return f"{obj.net_collections:,.2f} ETB"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or is_owner(request.user):
+            return qs
+        user_branches = get_user_finance_branches(request.user)
+        return qs.filter(branch__in=user_branches)

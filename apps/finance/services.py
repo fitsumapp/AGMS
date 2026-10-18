@@ -9,6 +9,7 @@ from apps.accounts.roles import is_owner
 from .models import (
     AccountAdjustment,
     AccountTransfer,
+    BillingSettlementBatch,
     BranchFinanceSettings,
     Expense,
     ExpenseCategory,
@@ -17,6 +18,8 @@ from .models import (
     FinanceSequence,
     FinancialAccount,
     FinancialReconciliation,
+    SettledBillingPayment,
+    SettledBillingRefund,
     Supplier,
 )
 from .permissions import (
@@ -844,13 +847,16 @@ def post_verified_billing_batch_to_account(
     start_date,
     end_date,
     payment_method_type: str = "CASH",
+    notes: str = "",
 ) -> dict:
     """
     Authoritatively settle verified customer billing collections and completed refunds into a financial account.
-    - Idempotent: checks for prior batch settlement to prevent duplicate postings.
+    - Durable exactly-once posting: Tracks every settled payment/refund with database UNIQUE constraints.
+    - Overlap-safe: Only unsettled payments and refunds in the specified range are processed.
+    - Idempotent: Attempting to settle a range with zero unsettled transactions cleanly reports that all transactions are already settled.
     - Atomically updates account current_balance by net verified revenue (collections - refunds).
     - Preserves Phase 05 Billing as the sole authoritative source of truth.
-    - Enforces closed-period check.
+    - Enforces closed-period check and branch isolation.
     """
     if not can_manage_accounts(actor):
         raise ValidationError(_("You do not have permission to post settlements to financial accounts."))
@@ -862,80 +868,154 @@ def post_verified_billing_batch_to_account(
 
     from apps.billing.models import Payment, Refund
 
-    settle_ref = f"SETTLE-{branch.code or branch.id}-{payment_method_type}-{start_date}-{end_date}"
-    if AccountAdjustment.objects.filter(account=account, reason__contains=settle_ref).exists():
-        raise ValidationError(_(f"Batch settlement '{settle_ref}' has already been posted to account '{account.name}'."))
-
     with transaction.atomic():
         locked_account = FinancialAccount.objects.select_for_update().get(pk=account.pk)
 
-        payments_qs = Payment.objects.filter(
-            branch=branch,
-            payment_method__method_type=payment_method_type,
-            status=Payment.Status.VERIFIED,
-            paid_at__date__gte=start_date,
-            paid_at__date__lte=end_date,
+        # 1. Fetch candidate UNSETTLED verified customer payments
+        candidate_payment_ids = list(
+            Payment.objects.filter(
+                branch=branch,
+                payment_method__method_type=payment_method_type,
+                status=Payment.Status.VERIFIED,
+                paid_at__date__gte=start_date,
+                paid_at__date__lte=end_date,
+            ).exclude(
+                id__in=SettledBillingPayment.objects.values("payment_id")
+            ).order_by("id").values_list("id", flat=True)
         )
-        total_payments = payments_qs.aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
-        payment_count = payments_qs.count()
 
-        refunds_qs = Refund.objects.filter(
-            payment__branch=branch,
-            payment__payment_method__method_type=payment_method_type,
-            status=Refund.Status.COMPLETED,
-            completed_at__date__gte=start_date,
-            completed_at__date__lte=end_date,
+        unsettled_payments = []
+        if candidate_payment_ids:
+            # Row lock on billing_payment without outer join
+            locked_payments = list(
+                Payment.objects.filter(id__in=candidate_payment_ids)
+                .select_for_update()
+                .order_by("id")
+            )
+            # Re-verify settled status under row lock in case of concurrent commit
+            already_settled_pids = set(
+                SettledBillingPayment.objects.filter(
+                    payment_id__in=[p.id for p in locked_payments]
+                ).values_list("payment_id", flat=True)
+            )
+            unsettled_payments = [p for p in locked_payments if p.id not in already_settled_pids]
+
+        # 2. Fetch candidate UNSETTLED completed refunds
+        candidate_refund_ids = list(
+            Refund.objects.filter(
+                payment__branch=branch,
+                payment__payment_method__method_type=payment_method_type,
+                status=Refund.Status.COMPLETED,
+                completed_at__date__gte=start_date,
+                completed_at__date__lte=end_date,
+            ).exclude(
+                id__in=SettledBillingRefund.objects.values("refund_id")
+            ).order_by("id").values_list("id", flat=True)
         )
-        total_refunds = refunds_qs.aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
-        refund_count = refunds_qs.count()
 
+        unsettled_refunds = []
+        if candidate_refund_ids:
+            # Row lock on billing_refund without outer join
+            locked_refunds = list(
+                Refund.objects.filter(id__in=candidate_refund_ids)
+                .select_for_update()
+                .order_by("id")
+            )
+            # Re-verify settled status under row lock in case of concurrent commit
+            already_settled_rids = set(
+                SettledBillingRefund.objects.filter(
+                    refund_id__in=[r.id for r in locked_refunds]
+                ).values_list("refund_id", flat=True)
+            )
+            unsettled_refunds = [r for r in locked_refunds if r.id not in already_settled_rids]
+
+        payment_count = len(unsettled_payments)
+        refund_count = len(unsettled_refunds)
+
+        if payment_count == 0 and refund_count == 0:
+            raise ValidationError(
+                _(f"No unsettled verified {payment_method_type} transactions found for {branch.name} "
+                  f"between {start_date} and {end_date}. All transactions in this date range have already been settled.")
+            )
+
+        total_payments = sum((p.amount for p in unsettled_payments), Decimal("0.00"))
+        total_refunds = sum((r.amount for r in unsettled_refunds), Decimal("0.00"))
         net_collections = total_payments - total_refunds
-        if net_collections == Decimal("0.00"):
-            return {
-                "settlement_reference": settle_ref,
-                "payment_count": payment_count,
-                "total_payments": total_payments,
-                "refund_count": refund_count,
-                "total_refunds": total_refunds,
-                "net_collections": Decimal("0.00"),
-                "adjustment": None,
-            }
 
-        adj_type = AccountAdjustment.AdjustmentType.CREDIT if net_collections > Decimal("0.00") else AccountAdjustment.AdjustmentType.DEBIT
-        abs_net = abs(net_collections)
-
-        adj_num = generate_next_finance_number("account_adjustment", "ADJ")
-        adjustment = AccountAdjustment.objects.create(
-            adjustment_number=adj_num,
-            account=locked_account,
-            adjustment_type=adj_type,
-            amount=abs_net,
-            adjustment_date=end_date,
-            reason=f"Authoritative billing settlement [{settle_ref}]: {payment_count} payments ({total_payments} ETB), {refund_count} refunds ({total_refunds} ETB)",
-            performed_by=actor,
-            approved_by=actor,
+        # 3. Create durable BillingSettlementBatch
+        batch_num = generate_next_finance_number("billing_settlement_batch", "SETTLE")
+        batch = BillingSettlementBatch.objects.create(
+            batch_number=batch_num,
+            branch=branch,
+            financial_account=locked_account,
+            payment_method_type=payment_method_type,
+            period_start=start_date,
+            period_end=end_date,
+            payment_count=payment_count,
+            total_payments=total_payments,
+            refund_count=refund_count,
+            total_refunds=total_refunds,
+            net_collections=net_collections,
+            settled_by=actor,
+            notes=notes,
         )
 
-        if adj_type == AccountAdjustment.AdjustmentType.CREDIT:
-            locked_account.current_balance += abs_net
-        else:
-            if not locked_account.allow_negative and (locked_account.current_balance - abs_net < Decimal("0.00")):
-                raise ValidationError({"account": _("Debit settlement would cause a negative balance.")})
-            locked_account.current_balance -= abs_net
-        locked_account.save(update_fields=["current_balance", "updated_at"])
+        # 4. Durable per-transaction tracking records (Database UNIQUE constraint protects against any double-settlement)
+        for p in unsettled_payments:
+            SettledBillingPayment.objects.create(
+                payment=p,
+                settlement_batch=batch,
+                amount=p.amount,
+            )
+
+        for r in unsettled_refunds:
+            SettledBillingRefund.objects.create(
+                refund=r,
+                settlement_batch=batch,
+                amount=r.amount,
+            )
+
+        # 5. Create AccountAdjustment and update balance if net is non-zero
+        adjustment = None
+        if net_collections != Decimal("0.00"):
+            adj_type = AccountAdjustment.AdjustmentType.CREDIT if net_collections > Decimal("0.00") else AccountAdjustment.AdjustmentType.DEBIT
+            abs_net = abs(net_collections)
+
+            adj_num = generate_next_finance_number("account_adjustment", "ADJ")
+            adjustment = AccountAdjustment.objects.create(
+                adjustment_number=adj_num,
+                account=locked_account,
+                adjustment_type=adj_type,
+                amount=abs_net,
+                adjustment_date=end_date,
+                reason=f"Authoritative billing settlement [{batch.batch_number}]: {payment_count} payments ({total_payments} ETB), {refund_count} refunds ({total_refunds} ETB)",
+                performed_by=actor,
+                approved_by=actor,
+            )
+            batch.adjustment = adjustment
+            batch.save(update_fields=["adjustment", "updated_at"])
+
+            if adj_type == AccountAdjustment.AdjustmentType.CREDIT:
+                locked_account.current_balance += abs_net
+            else:
+                if not locked_account.allow_negative and (locked_account.current_balance - abs_net < Decimal("0.00")):
+                    raise ValidationError({"account": _("Debit settlement would cause a negative balance.")})
+                locked_account.current_balance -= abs_net
+            locked_account.save(update_fields=["current_balance", "updated_at"])
 
         FinanceAuditEvent.objects.create(
             event_type=FinanceAuditEvent.EventType.ADJUSTMENT_APPLIED,
             actor=actor,
             branch=branch,
-            target_type="AccountAdjustment",
-            target_id=str(adjustment.id),
-            action_summary=f"Posted billing settlement {settle_ref} ({net_collections} ETB) into {locked_account.name}",
-            metadata={"settle_ref": settle_ref, "net": str(net_collections)},
+            target_type="BillingSettlementBatch",
+            target_id=str(batch.id),
+            action_summary=f"Settled {batch.batch_number} ({net_collections} ETB, {payment_count} pays, {refund_count} refs) into {locked_account.name}",
+            metadata={"batch_number": batch.batch_number, "net": str(net_collections)},
         )
 
         return {
-            "settlement_reference": settle_ref,
+            "settlement_reference": batch.batch_number,
+            "batch": batch,
             "payment_count": payment_count,
             "total_payments": total_payments,
             "refund_count": refund_count,
