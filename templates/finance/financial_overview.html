@@ -1,0 +1,250 @@
+{% extends "unfold/layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+  <!-- Page Header & Filter Form -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600 dark:text-teal-400">account_balance_wallet</span>
+        Financial Overview & Cash Flow
+      </h1>
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        Operational cash collections, verified expenses, liquidity accounts, and net cash movement.
+      </p>
+    </div>
+
+    <!-- Filter Form -->
+    <form method="get" class="flex flex-wrap items-center gap-3">
+      {% if user_branches %}
+      <select name="branch" class="rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 text-gray-800 dark:text-gray-200">
+        <option value="">All Authorized Branches</option>
+        {% for b in user_branches %}
+        <option value="{{ b.id }}" {% if selected_branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+
+      <select name="period" class="rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 text-gray-800 dark:text-gray-200">
+        <option value="today" {% if period == 'today' %}selected{% endif %}>Today</option>
+        <option value="this_week" {% if period == 'this_week' %}selected{% endif %}>This Week</option>
+        <option value="this_month" {% if period == 'this_month' %}selected{% endif %}>This Month</option>
+        <option value="last_month" {% if period == 'last_month' %}selected{% endif %}>Last Month</option>
+        <option value="this_year" {% if period == 'this_year' %}selected{% endif %}>This Year</option>
+      </select>
+
+      <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1 shadow-sm">
+        <span class="material-symbols-outlined text-sm">filter_alt</span> Apply Filter
+      </button>
+    </form>
+  </div>
+
+  <!-- Metric KPI Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Collections -->
+    <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/80 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Verified Collections</span>
+        <span class="material-symbols-outlined text-teal-600 dark:text-teal-400">payments</span>
+      </div>
+      <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ metrics.total_collections|floatformat:2 }} ETB</div>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ metrics.collections_count }} verified receipts</p>
+    </div>
+
+    <!-- Completed Refunds -->
+    <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/80 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Member Refunds</span>
+        <span class="material-symbols-outlined text-rose-500">currency_exchange</span>
+      </div>
+      <div class="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-400">{{ metrics.total_refunds|floatformat:2 }} ETB</div>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Completed refund outflows</p>
+    </div>
+
+    <!-- Operational Expenses Paid -->
+    <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/80 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Paid Expenses</span>
+        <span class="material-symbols-outlined text-amber-500">receipt_long</span>
+      </div>
+      <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ metrics.total_paid_expenses|floatformat:2 }} ETB</div>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Disbursed operational costs</p>
+    </div>
+
+    <!-- Net Cash Movement -->
+    <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/80 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Net Operating Cash</span>
+        <span class="material-symbols-outlined {% if metrics.net_cash_movement >= 0 %}text-emerald-500{% else %}text-rose-500{% endif %}">
+          trending_{% if metrics.net_cash_movement >= 0 %}up{% else %}down{% endif %}
+        </span>
+      </div>
+      <div class="mt-2 text-2xl font-bold {% if metrics.net_cash_movement >= 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+        {{ metrics.net_cash_movement|floatformat:2 }} ETB
+      </div>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Surplus after expenses & refunds</p>
+    </div>
+  </div>
+
+  <!-- Secondary Metrics: Accounts & Liabilities -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+      <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Total Cash on Hand</span>
+      <div class="text-xl font-bold text-gray-900 dark:text-white mt-1">{{ metrics.cash_balance|floatformat:2 }} ETB</div>
+      <p class="text-xs text-gray-500">Physical branch cash registers & petty cash</p>
+    </div>
+    <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+      <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Total Bank Liquidity</span>
+      <div class="text-xl font-bold text-gray-900 dark:text-white mt-1">{{ metrics.bank_balance|floatformat:2 }} ETB</div>
+      <p class="text-xs text-gray-500">Commercial banks & digital wallets</p>
+    </div>
+    <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+      <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outstanding Expense Liabilities</span>
+      <div class="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{{ metrics.outstanding_expenses|floatformat:2 }} ETB</div>
+      <p class="text-xs text-gray-500">Approved unpaid/partially paid expenses</p>
+    </div>
+  </div>
+
+  <!-- Financial Accounts Table -->
+  <div class="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 flex items-center justify-between">
+      <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600">account_balance</span>
+        Cash & Bank Accounts Status
+      </h3>
+      <span class="text-xs font-medium text-gray-500">{{ accounts|length }} Active Accounts</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
+        <thead class="bg-gray-50 dark:bg-gray-800/50 text-xs uppercase text-gray-500 border-b border-gray-200 dark:border-gray-700">
+          <tr>
+            <th class="px-6 py-3">Account Name</th>
+            <th class="px-6 py-3">Type</th>
+            <th class="px-6 py-3">Branch</th>
+            <th class="px-6 py-3">Bank / Identifier</th>
+            <th class="px-6 py-3 text-right">Current Balance</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          {% for acc in accounts %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <td class="px-6 py-3 font-semibold text-gray-900 dark:text-white">{{ acc.name }}</td>
+            <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">{{ acc.get_account_type_display }}</span></td>
+            <td class="px-6 py-3">{{ acc.branch.name|default:"Gym-wide" }}</td>
+            <td class="px-6 py-3 font-mono text-xs">{{ acc.bank_name|default:"Cash Register" }} {% if acc.masked_account_number %}({{ acc.masked_account_number }}){% endif %}</td>
+            <td class="px-6 py-3 text-right font-bold text-gray-900 dark:text-white">{{ acc.current_balance|floatformat:2 }} {{ acc.currency }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-6 text-center text-gray-500">No active financial accounts configured.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Expenses by Category & Branch Comparison Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Category Breakdown -->
+    <div class="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+        <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-teal-600">pie_chart</span>
+          Expenses by Category
+        </h3>
+      </div>
+      <div class="p-6 space-y-4">
+        {% for cat in cat_breakdown %}
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-sm">
+            <span class="font-medium text-gray-900 dark:text-white">{{ cat.category_name }}</span>
+            <span class="font-bold text-gray-900 dark:text-white">{{ cat.total_amount|floatformat:2 }} ETB ({{ cat.percentage }}%)</span>
+          </div>
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div class="bg-teal-600 h-2 rounded-full" style="width: {{ cat.percentage }}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-sm text-gray-500 text-center py-4">No approved expenses recorded for this period.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Branch Expense Comparison -->
+    <div class="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+        <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-teal-600">domain</span>
+          Branch Expense Breakdown
+        </h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
+          <thead class="bg-gray-50 dark:bg-gray-800/50 text-xs uppercase text-gray-500 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th class="px-6 py-3">Branch</th>
+              <th class="px-6 py-3 text-right">Total Expenses</th>
+              <th class="px-6 py-3 text-right">Paid</th>
+              <th class="px-6 py-3 text-right">Outstanding</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for b in branch_comparison %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              <td class="px-6 py-3 font-semibold text-gray-900 dark:text-white">{{ b.branch__name }} ({{ b.branch__code }})</td>
+              <td class="px-6 py-3 text-right font-bold text-gray-900 dark:text-white">{{ b.total_amount|floatformat:2 }} ETB</td>
+              <td class="px-6 py-3 text-right text-emerald-600 dark:text-emerald-400">{{ b.paid_amount|floatformat:2 }} ETB</td>
+              <td class="px-6 py-3 text-right text-amber-600 dark:text-amber-400">{{ b.balance_due|floatformat:2 }} ETB</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-6 text-center text-gray-500">No branch expenses recorded.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Suppliers -->
+  <div class="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+      <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="material-symbols-outlined text-teal-600">store</span>
+        Top Suppliers & Vendors
+      </h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
+        <thead class="bg-gray-50 dark:bg-gray-800/50 text-xs uppercase text-gray-500 border-b border-gray-200 dark:border-gray-700">
+          <tr>
+            <th class="px-6 py-3">Supplier</th>
+            <th class="px-6 py-3">Type</th>
+            <th class="px-6 py-3 text-right">Invoiced (Billed)</th>
+            <th class="px-6 py-3 text-right">Paid</th>
+            <th class="px-6 py-3 text-right">Outstanding</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          {% for s in top_suppliers %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <td class="px-6 py-3 font-semibold text-gray-900 dark:text-white">{{ s.supplier__name }}</td>
+            <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">{{ s.supplier__supplier_type }}</span></td>
+            <td class="px-6 py-3 text-right font-bold text-gray-900 dark:text-white">{{ s.total_billed|floatformat:2 }} ETB</td>
+            <td class="px-6 py-3 text-right text-emerald-600 dark:text-emerald-400">{{ s.total_paid|floatformat:2 }} ETB</td>
+            <td class="px-6 py-3 text-right text-amber-600 dark:text-amber-400">{{ s.outstanding_balance|floatformat:2 }} ETB</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-6 text-center text-gray-500">No supplier expenses recorded.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

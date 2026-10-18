@@ -23,6 +23,10 @@ def test_all_admins_use_unfold():
         "staff.StaffProfile", "staff.TrainerProfile", "staff.TrainerMemberAssignment",
         "staff.TrainingSession", "staff.ShiftTemplate", "staff.StaffShift", "staff.LeaveRequest",
         "classes.ClassType", "classes.ClassScheduleTemplate", "classes.ClassSession", "classes.ClassBooking",
+        "finance.BranchFinanceSettings", "finance.ExpenseCategory", "finance.Supplier",
+        "finance.Expense", "finance.ExpensePayment", "finance.FinancialAccount",
+        "finance.AccountTransfer", "finance.AccountAdjustment",
+        "finance.FinancialReconciliation", "finance.FinanceAuditEvent",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

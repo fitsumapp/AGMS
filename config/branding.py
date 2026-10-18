@@ -217,6 +217,20 @@ def can_see_class_reports(request):
     from apps.classes.permissions import can_view_class_reports
     return can_view_class_reports(request.user)
 
+def can_see_finance(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.finance.permissions import can_view_financial_overview
+    return can_view_financial_overview(request.user)
+
+def can_see_expense_approvals(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request) or superuser(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -313,6 +327,18 @@ def unfold_config():
                 {"title": "Class Attendance", "icon": "fact_check", "link": format_lazy("{}?status__in=SCHEDULED,IN_PROGRESS", reverse_lazy("admin:classes_classsession_changelist")), "permission": can_see_classes},
                 {"title": "Class Calendar", "icon": "calendar_view_week", "link": reverse_lazy("class-calendar"), "permission": can_see_classes},
                 {"title": "Class Reports", "icon": "bar_chart", "link": reverse_lazy("class-reports"), "permission": can_see_class_reports},
+            ]},
+            {"title": "Finance & Expenses", "items": [
+                {"title": "Financial Overview", "icon": "space_dashboard", "link": reverse_lazy("finance-overview"), "permission": can_see_finance},
+                {"title": "Expenses", "icon": "receipt_long", "link": reverse_lazy("admin:finance_expense_changelist"), "permission": can_see_finance},
+                {"title": "Expense Categories", "icon": "category", "link": reverse_lazy("admin:finance_expensecategory_changelist"), "permission": can_see_finance},
+                {"title": "Suppliers", "icon": "store", "link": reverse_lazy("admin:finance_supplier_changelist"), "permission": can_see_finance},
+                {"title": "Expense Approvals", "icon": "approval", "link": format_lazy("{}?approval_status__exact=SUBMITTED", reverse_lazy("admin:finance_expense_changelist")), "permission": can_see_expense_approvals},
+                {"title": "Expense Payments", "icon": "payments", "link": reverse_lazy("admin:finance_expensepayment_changelist"), "permission": can_see_finance},
+                {"title": "Cash & Bank Accounts", "icon": "account_balance", "link": reverse_lazy("admin:finance_financialaccount_changelist"), "permission": can_see_finance},
+                {"title": "Account Transfers", "icon": "swap_horiz", "link": reverse_lazy("admin:finance_accounttransfer_changelist"), "permission": can_see_finance},
+                {"title": "Reconciliation", "icon": "fact_check", "link": reverse_lazy("admin:finance_financialreconciliation_changelist"), "permission": can_see_finance},
+                {"title": "Financial Reports", "icon": "summarize", "link": format_lazy("{}?category=financial", reverse_lazy("analytics-reports")), "permission": can_see_finance},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

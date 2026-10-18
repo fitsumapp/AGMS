@@ -38,6 +38,15 @@ def get_executive_dashboard_data(
             "icon": "warning",
             "color": "amber",
         },
+        {
+            "category": "financial",
+            "title": "Net Operating Cash",
+            "value": f"{fin.get('net_cash_movement', fin['net_cash_collections']):,.2f} ETB",
+            "status": f"Paid Expenses: {fin.get('paid_expenses', 0):,.2f} ETB",
+            "change": f"Liabilities: {fin.get('outstanding_expense_balance', 0):,.2f} ETB",
+            "icon": "account_balance_wallet",
+            "color": "teal",
+        },
         # Memberships
         {
             "category": "memberships",

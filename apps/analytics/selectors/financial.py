@@ -239,6 +239,39 @@ def get_financial_analytics(
         {"bucket": "90+ Days Overdue", "code": "90_plus", "amount": aging_buckets["overdue_90_plus"], "count": aging_counts["overdue_90_plus"]},
     ]
 
+    # Phase 10 Expenses & Net Cash Movement Integration
+    try:
+        from apps.finance.models import Expense, ExpensePayment
+        from apps.finance.selectors import get_expenses_by_category, get_expenses_by_branch
+
+        paid_expenses = (
+            ExpensePayment.objects.filter(
+                expense__branch__in=branch_qs,
+                status=ExpensePayment.Status.VERIFIED,
+                payment_date__gte=date_range.start_date,
+                payment_date__lte=date_range.end_date,
+            ).aggregate(tot=Sum("amount"))["tot"]
+            or Decimal("0.00")
+        )
+
+        outstanding_expense_balance = (
+            Expense.objects.filter(
+                branch__in=branch_qs,
+                approval_status=Expense.ApprovalStatus.APPROVED,
+            ).aggregate(tot=Sum("balance_due"))["tot"]
+            or Decimal("0.00")
+        )
+
+        cat_breakdown = get_expenses_by_category(branch_qs, date_range.start_date, date_range.end_date)
+        branch_exps = get_expenses_by_branch(branch_qs, date_range.start_date, date_range.end_date)
+    except Exception:
+        paid_expenses = Decimal("0.00")
+        outstanding_expense_balance = Decimal("0.00")
+        cat_breakdown = []
+        branch_exps = []
+
+    net_cash_movement = net_cash_collections - paid_expenses
+
     return {
         "total_verified_collections": total_verified_collections,
         "total_collected": total_verified_collections,
@@ -265,4 +298,9 @@ def get_financial_analytics(
         "daily_collection_trend": daily_trend,
         "monthly_collection_trend": monthly_trend,
         "aging_summary": aging_summary,
+        "paid_expenses": paid_expenses,
+        "net_cash_movement": net_cash_movement,
+        "outstanding_expense_balance": outstanding_expense_balance,
+        "expenses_by_category": cat_breakdown,
+        "branch_expense_comparison": branch_exps,
     }

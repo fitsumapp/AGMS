@@ -17,6 +17,11 @@ from apps.staff.views import (
     staff_reports_view,
     trainer_performance_view,
 )
+from apps.finance.views import (
+    financial_overview_view,
+    download_expense_receipt,
+    download_payment_attachment,
+)
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="admin:index", permanent=False)),
@@ -34,5 +39,8 @@ urlpatterns = [
     path("admin/analytics/reports/", admin.site.admin_view(report_center_view), name="analytics-reports"),
     path("admin/staff/performance/", admin.site.admin_view(trainer_performance_view), name="staff-performance"),
     path("admin/staff/reports/", admin.site.admin_view(staff_reports_view), name="staff-reports"),
+    path("admin/finance/overview/", admin.site.admin_view(financial_overview_view), name="finance-overview"),
+    path("admin/finance/expenses/<uuid:expense_id>/receipt/", download_expense_receipt, name="expense-receipt-download"),
+    path("admin/finance/payments/<uuid:payment_id>/attachment/", download_payment_attachment, name="payment-attachment-download"),
     path("admin/", admin.site.urls),
 ]
