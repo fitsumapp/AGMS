@@ -65,6 +65,7 @@ from apps.finance.services import (
     void_expense,
     void_expense_payment,
     get_or_create_branch_finance_settings,
+    post_verified_billing_batch_to_account,
 )
 
 pytestmark = pytest.mark.django_db
@@ -972,4 +973,282 @@ def test_negative_balance_enforcement_and_branch_policy(test_branches, test_user
     cash_bole.refresh_from_db()
     assert pay.status == ExpensePayment.Status.VERIFIED
     assert cash_bole.current_balance == Decimal("-500.00")
+
+
+# 21. Billing Source Records vs Finance Reconciliation & Settlement Posting
+def test_billing_source_to_finance_reconciliation_and_batch_settlement(test_branches, test_users, test_finance_accounts):
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    accountant = test_users["accountant"]
+    cash_bole = test_finance_accounts["cash_bole"]
+    today = timezone.localdate()
+
+    from apps.billing.models import Invoice, Payment, PaymentMethod, Refund
+    from apps.members.models import Member
+
+    # Setup billing payment methods
+    pm_cash, _ = PaymentMethod.objects.get_or_create(
+        code="CASH_TEST",
+        defaults={"name": "Cash Test", "method_type": "CASH", "is_active": True},
+    )
+    pm_bank, _ = PaymentMethod.objects.get_or_create(
+        code="BANK_TEST",
+        defaults={"name": "Bank Transfer Test", "method_type": "BANK_TRANSFER", "is_active": True},
+    )
+
+    member = Member.objects.create(
+        member_number="MBR-9999",
+        first_name="Abebe",
+        last_name="Bikila",
+        phone="+251911999999",
+        home_branch=b1,
+    )
+    inv = Invoice.objects.create(
+        invoice_number="INV-9999",
+        member=member,
+        branch=b1,
+        issue_date=today,
+        due_date=today,
+        subtotal=Decimal("4000.00"),
+        total_amount=Decimal("4000.00"),
+        balance_due=Decimal("0.00"),
+        paid_amount=Decimal("4000.00"),
+        status=Invoice.Status.PAID,
+    )
+
+    # 1. Authoritative Phase 05 Customer Payment (Cash: 3,000 ETB)
+    pay_cash = Payment.objects.create(
+        payment_number="PAY-CASH-001",
+        invoice=inv,
+        branch=b1,
+        amount=Decimal("3000.00"),
+        payment_method=pm_cash,
+        status=Payment.Status.VERIFIED,
+        paid_at=timezone.now(),
+        idempotency_key="idemp-pay-cash-001",
+    )
+
+    # 2. Authoritative Phase 05 Customer Refund (Cash: 500 ETB)
+    refund = Refund.objects.create(
+        refund_number="REF-001",
+        payment=pay_cash,
+        invoice=inv,
+        amount=Decimal("500.00"),
+        reason="Overcharge adjustment",
+        status=Refund.Status.COMPLETED,
+        completed_at=timezone.now(),
+    )
+
+    # Reconcile Bole Cash Account for today:
+    # Opening balance: 5,000 ETB
+    # Expected: 5000 + 3000 (cash payment) - 500 (refund) = 7500 ETB
+    recon = conduct_reconciliation(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        actual_counted_balance=Decimal("7500.00"),
+        reconciliation_date=today,
+        period_start=today,
+        period_end=today,
+        submit_for_closure=True,
+    )
+    assert recon.total_inflows == Decimal("3000.00")
+    assert recon.total_outflows == Decimal("500.00")
+    assert recon.expected_balance == Decimal("7500.00")
+    assert recon.variance == Decimal("0.00")
+
+    # Now post authoritative billing batch settlement into cash_bole:
+    # Net collections = 3,000 - 500 = 2,500 ETB
+    init_balance = cash_bole.current_balance
+    res = post_verified_billing_batch_to_account(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        start_date=today,
+        end_date=today,
+        payment_method_type="CASH",
+    )
+    cash_bole.refresh_from_db()
+    assert res["net_collections"] == Decimal("2500.00")
+    assert cash_bole.current_balance == init_balance + Decimal("2500.00")
+
+    # Duplicate settlement posting -> Rejected (idempotent)
+    with pytest.raises(ValidationError) as exc:
+        post_verified_billing_batch_to_account(
+            actor=accountant,
+            branch=b1,
+            account=cash_bole,
+            start_date=today,
+            end_date=today,
+            payment_method_type="CASH",
+        )
+    assert "has already been posted" in str(exc.value)
+
+
+# 22. Expense Payment Void Modes & Duplicate Prevention
+def test_expense_payment_void_modes_and_duplicate_prevention(test_branches, test_users, test_category, test_finance_accounts):
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    accountant = test_users["accountant"]
+    cash_bole = test_finance_accounts["cash_bole"]
+
+    exp1 = create_expense(
+        actor=owner,
+        branch=b1,
+        category=test_category,
+        description="Printer toner supply",
+        amount=Decimal("800.00"),
+    )
+    approve_expense(actor=owner, expense=exp1)
+
+    pay1 = record_expense_payment(
+        actor=accountant,
+        expense=exp1,
+        financial_account=cash_bole,
+        amount=Decimal("800.00"),
+    )
+    cash_bole.refresh_from_db()
+    balance_after_pay = cash_bole.current_balance
+
+    # Mode A: Physical return of funds (restore_account_balance=True)
+    v_pay1 = void_expense_payment(
+        actor=owner,
+        payment=pay1,
+        reason="Vendor refunded defective toner",
+        restore_account_balance=True,
+    )
+    cash_bole.refresh_from_db()
+    exp1.refresh_from_db()
+    assert v_pay1.status == ExpensePayment.Status.VOIDED
+    assert exp1.payment_status == Expense.PaymentStatus.UNPAID
+    assert cash_bole.current_balance == balance_after_pay + Decimal("800.00")
+
+    # Duplicate void call -> Rejected
+    with pytest.raises(ValidationError) as exc:
+        void_expense_payment(
+            actor=owner,
+            payment=pay1,
+            reason="Repeated void attempt",
+        )
+    assert "Only verified payments can be voided" in str(exc.value)
+
+    # Mode B: Administrative cancellation without false cash restoration (restore_account_balance=False)
+    exp2 = create_expense(
+        actor=owner,
+        branch=b1,
+        category=test_category,
+        description="Erroneous duplicate entry",
+        amount=Decimal("300.00"),
+    )
+    approve_expense(actor=owner, expense=exp2)
+    pay2 = record_expense_payment(
+        actor=accountant,
+        expense=exp2,
+        financial_account=cash_bole,
+        amount=Decimal("300.00"),
+    )
+    cash_bole.refresh_from_db()
+    bal_before_admin_void = cash_bole.current_balance
+
+    v_pay2 = void_expense_payment(
+        actor=owner,
+        payment=pay2,
+        reason="Data-entry error, money never physically left bank",
+        restore_account_balance=False,
+    )
+    cash_bole.refresh_from_db()
+    exp2.refresh_from_db()
+    assert v_pay2.status == ExpensePayment.Status.VOIDED
+    assert exp2.payment_status == Expense.PaymentStatus.UNPAID
+    # Account balance must NOT have increased
+    assert cash_bole.current_balance == bal_before_admin_void
+
+
+# 23. Closed-Period Integrity & Backdating Protection
+def test_closed_period_integrity_and_backdating_rejection(test_branches, test_users, test_category, test_finance_accounts):
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    mgr_bole = test_users["mgr_bole"]
+    accountant = test_users["accountant"]
+    cash_bole = test_finance_accounts["cash_bole"]
+    past_date = timezone.localdate() - timezone.timedelta(days=10)
+
+    # 1. Conduct and CLOSE a reconciliation period covering past_date
+    recon = conduct_reconciliation(
+        actor=accountant,
+        branch=b1,
+        account=cash_bole,
+        actual_counted_balance=cash_bole.opening_balance,
+        reconciliation_date=past_date,
+        period_start=past_date,
+        period_end=past_date,
+        submit_for_closure=True,
+    )
+    recon = close_reconciliation(actor=mgr_bole, reconciliation=recon)
+    assert recon.status == FinancialReconciliation.Status.APPROVED_CLOSED
+
+    # 2. Attempting to backdate an expense payment into the closed period -> REJECTED
+    exp = create_expense(
+        actor=owner,
+        branch=b1,
+        category=test_category,
+        description="Backdated janitorial supplies",
+        amount=Decimal("500.00"),
+    )
+    approve_expense(actor=owner, expense=exp)
+
+    with pytest.raises(ValidationError) as exc:
+        record_expense_payment(
+            actor=accountant,
+            expense=exp,
+            financial_account=cash_bole,
+            amount=Decimal("500.00"),
+            payment_date=past_date,
+        )
+    assert "is closed and locked" in str(exc.value)
+
+    # 3. Attempting to backdate an account adjustment into the closed period -> REJECTED
+    with pytest.raises(ValidationError) as exc:
+        perform_account_adjustment(
+            actor=accountant,
+            account=cash_bole,
+            adjustment_type=AccountAdjustment.AdjustmentType.CREDIT,
+            amount=Decimal("100.00"),
+            reason="Backdated correction attempt",
+            adjustment_date=past_date,
+        )
+    assert "is closed and locked" in str(exc.value)
+
+    # 4. Attempting to create an overlapping reconciliation for closed period -> REJECTED
+    with pytest.raises(ValidationError) as exc:
+        conduct_reconciliation(
+            actor=accountant,
+            branch=b1,
+            account=cash_bole,
+            actual_counted_balance=cash_bole.opening_balance,
+            reconciliation_date=past_date,
+            period_start=past_date,
+            period_end=past_date,
+        )
+    assert "already exists" in str(exc.value)
+
+    # 5. Direct modification of closed reconciliation fields -> REJECTED
+    recon.actual_counted_balance = Decimal("99999.00")
+    with pytest.raises(ValidationError) as exc:
+        recon.clean()
+    assert "Closed reconciliation periods are immutable" in str(exc.value)
+
+    # 6. Deletion of closed reconciliation -> REJECTED
+    with pytest.raises(ValidationError) as exc:
+        recon.delete()
+    assert "Closed reconciliation periods cannot be deleted" in str(exc.value)
+
+    # 7. Reopening: Non-owner manager -> REJECTED
+    with pytest.raises(ValidationError) as exc:
+        reopen_reconciliation(actor=mgr_bole, reconciliation=recon, reason="Auditing")
+    assert "Only a Gym Owner can reopen" in str(exc.value)
+
+    # 8. Reopening: Owner with valid reason -> SUCCESS
+    reopened = reopen_reconciliation(actor=owner, reconciliation=recon, reason="External audit adjustments required")
+    assert reopened.status == FinancialReconciliation.Status.DRAFT
 

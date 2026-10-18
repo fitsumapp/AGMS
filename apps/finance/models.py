@@ -657,11 +657,22 @@ class FinancialReconciliation(UUIDTimeStampedModel):
 
     def clean(self):
         super().clean()
+        if self.pk:
+            original = FinancialReconciliation.objects.filter(pk=self.pk).first()
+            if original and original.status == self.Status.APPROVED_CLOSED and self.status == self.Status.APPROVED_CLOSED:
+                for field in ["opening_balance", "total_inflows", "total_outflows", "expected_balance", "actual_counted_balance", "variance", "period_start", "period_end"]:
+                    if getattr(self, field) != getattr(original, field):
+                        raise ValidationError(f"Closed reconciliation periods are immutable. Cannot alter '{field}'.")
         if self.actual_counted_balance is not None and self.expected_balance is not None:
             self.variance = self.actual_counted_balance - self.expected_balance
         if self.status in [self.Status.SUBMITTED, self.Status.APPROVED_CLOSED]:
             if self.variance != Decimal("0.00") and not self.variance_reason.strip():
                 raise ValidationError({"variance_reason": "A detailed explanation is required when there is a cash/bank variance."})
+
+    def delete(self, *args, **kwargs):
+        if self.status == self.Status.APPROVED_CLOSED:
+            raise ValidationError("Closed reconciliation periods cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         self.clean()

@@ -56,6 +56,35 @@ def get_or_create_branch_finance_settings(branch) -> BranchFinanceSettings:
     return settings
 
 
+def check_closed_reconciliation(branch, account, transaction_date):
+    """
+    Ensure the transaction_date does not fall inside an already approved and closed reconciliation period.
+    Users cannot backdate transactions into closed periods.
+    Any corrections must be posted in an open period.
+    """
+    if not transaction_date:
+        return
+    
+    filters = {
+        "status": FinancialReconciliation.Status.APPROVED_CLOSED,
+        "period_start__lte": transaction_date,
+        "period_end__gte": transaction_date,
+    }
+    if account:
+        filters["account"] = account
+    elif branch:
+        filters["branch"] = branch
+        
+    closed_recon = FinancialReconciliation.objects.filter(**filters).first()
+    if closed_recon:
+        target_name = account.name if account else (branch.name if branch else "gym")
+        raise ValidationError(
+            _(f"Cannot post or modify transactions for date {transaction_date}: "
+              f"Reconciliation {closed_recon.reconciliation_number} on '{target_name}' "
+              f"for period [{closed_recon.period_start} to {closed_recon.period_end}] is closed and locked.")
+        )
+
+
 def create_expense(
     actor,
     branch,
@@ -318,6 +347,7 @@ def record_expense_payment(
 
         pay_num = generate_next_finance_number("expense_payment", "EXPPAY")
         p_date = payment_date or timezone.localdate()
+        check_closed_reconciliation(locked_expense.branch, locked_account, p_date)
 
         payment = ExpensePayment.objects.create(
             payment_number=pay_num,
@@ -361,8 +391,18 @@ def record_expense_payment(
         return payment
 
 
-def void_expense_payment(actor, payment: ExpensePayment, reason: str) -> ExpensePayment:
-    """Void a verified expense payment and restore account and expense balances."""
+def void_expense_payment(
+    actor,
+    payment: ExpensePayment,
+    reason: str,
+    restore_account_balance: bool = True,
+) -> ExpensePayment:
+    """
+    Void a verified expense payment and optionally restore account and expense balances.
+    - If restore_account_balance=True (default): Re-credits the financial account (physical cash/bank return).
+    - If restore_account_balance=False: Administrative cancellation of an erroneous posting where funds were not disbursed/recovered.
+    Enforces closed-period check, row locking, and prevents duplicate void requests.
+    """
     if not reason or not reason.strip():
         raise ValidationError({"reason": _("A void reason is mandatory.")})
 
@@ -377,11 +417,15 @@ def void_expense_payment(actor, payment: ExpensePayment, reason: str) -> Expense
         if not can_record_expense_payment(actor, locked_expense):
             raise ValidationError(_("You do not have authorization to void payments for this branch."))
 
+        # Enforce closed-period protection: Cannot silently void transactions in closed reconciliation periods
+        check_closed_reconciliation(locked_expense.branch, locked_account, locked_payment.payment_date)
+
         amount = locked_payment.amount
 
-        # Re-credit financial account
-        locked_account.current_balance += amount
-        locked_account.save(update_fields=["current_balance", "updated_at"])
+        # Re-credit financial account only if physical funds are restored
+        if restore_account_balance:
+            locked_account.current_balance += amount
+            locked_account.save(update_fields=["current_balance", "updated_at"])
 
         # Re-adjust expense paid and balance
         locked_expense.paid_amount -= amount
@@ -399,13 +443,15 @@ def void_expense_payment(actor, payment: ExpensePayment, reason: str) -> Expense
         locked_payment.void_reason = reason.strip()
         locked_payment.save(update_fields=["status", "voided_by", "voided_at", "void_reason", "updated_at"])
 
+        action_mode = "Balance Restored" if restore_account_balance else "Administrative Cancellation (No Balance Restored)"
         FinanceAuditEvent.objects.create(
             event_type=FinanceAuditEvent.EventType.PAYMENT_VOIDED,
             actor=actor,
             branch=locked_expense.branch,
             target_type="ExpensePayment",
             target_id=str(locked_payment.id),
-            action_summary=f"Voided payment {locked_payment.payment_number} ({amount} ETB): {reason.strip()}",
+            action_summary=f"Voided payment {locked_payment.payment_number} ({amount} ETB) [{action_mode}]: {reason.strip()}",
+            metadata={"restore_account_balance": restore_account_balance, "amount": str(amount)},
         )
 
         return locked_payment
@@ -450,6 +496,8 @@ def transfer_funds(
 
         trf_num = generate_next_finance_number("account_transfer", "TRF")
         t_date = transfer_date or timezone.localdate()
+        check_closed_reconciliation(locked_src.branch, locked_src, t_date)
+        check_closed_reconciliation(locked_dst.branch, locked_dst, t_date)
 
         transfer = AccountTransfer.objects.create(
             transfer_number=trf_num,
@@ -503,6 +551,7 @@ def perform_account_adjustment(
         locked = FinancialAccount.objects.select_for_update().get(pk=account.pk)
         adj_num = generate_next_finance_number("account_adjustment", "ADJ")
         adj_date = adjustment_date or timezone.localdate()
+        check_closed_reconciliation(locked.branch, locked, adj_date)
 
         if adjustment_type == AccountAdjustment.AdjustmentType.DEBIT:
             if not locked.allow_negative and (locked.current_balance - amount < Decimal("0.00")):
@@ -559,6 +608,19 @@ def conduct_reconciliation(
     p_end = period_end or rec_date
 
     with transaction.atomic():
+        # Prevent creating overlapping reconciliation for an already closed period
+        overlapping_closed = FinancialReconciliation.objects.filter(
+            account=account,
+            status=FinancialReconciliation.Status.APPROVED_CLOSED,
+            period_start__lte=p_end,
+            period_end__gte=p_start,
+        ).first()
+        if overlapping_closed:
+            raise ValidationError(
+                _(f"A closed reconciliation period ({overlapping_closed.reconciliation_number}) "
+                  f"already exists for '{account.name}' covering [{overlapping_closed.period_start} to {overlapping_closed.period_end}].")
+            )
+
         # Expected balance calculation based on current account balance:
         # Opening balance at period start, plus inflows minus outflows
         opening = account.opening_balance
@@ -625,11 +687,50 @@ def conduct_reconciliation(
 
             billing_refunds = Refund.objects.filter(
                 payment__branch=account.branch,
+                payment__payment_method__method_type="CASH",
                 status=Refund.Status.COMPLETED,
                 completed_at__date__gte=p_start,
                 completed_at__date__lte=p_end,
             ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
             outflows += billing_refunds
+        elif account.account_type == FinancialAccount.AccountType.BANK and account.branch:
+            from apps.billing.models import Payment, Refund
+            billing_bank = Payment.objects.filter(
+                branch=account.branch,
+                payment_method__method_type="BANK_TRANSFER",
+                status=Payment.Status.VERIFIED,
+                paid_at__date__gte=p_start,
+                paid_at__date__lte=p_end,
+            ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+            inflows += billing_bank
+
+            billing_bank_refunds = Refund.objects.filter(
+                payment__branch=account.branch,
+                payment__payment_method__method_type="BANK_TRANSFER",
+                status=Refund.Status.COMPLETED,
+                completed_at__date__gte=p_start,
+                completed_at__date__lte=p_end,
+            ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+            outflows += billing_bank_refunds
+        elif account.account_type == FinancialAccount.AccountType.WALLET and account.branch:
+            from apps.billing.models import Payment, Refund
+            billing_wallet = Payment.objects.filter(
+                branch=account.branch,
+                payment_method__method_type__in=["TELEBIRR", "MPESA"],
+                status=Payment.Status.VERIFIED,
+                paid_at__date__gte=p_start,
+                paid_at__date__lte=p_end,
+            ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+            inflows += billing_wallet
+
+            billing_wallet_refunds = Refund.objects.filter(
+                payment__branch=account.branch,
+                payment__payment_method__method_type__in=["TELEBIRR", "MPESA"],
+                status=Refund.Status.COMPLETED,
+                completed_at__date__gte=p_start,
+                completed_at__date__lte=p_end,
+            ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+            outflows += billing_wallet_refunds
 
         expected = opening + inflows - outflows
         variance = actual_counted_balance - expected
@@ -734,3 +835,111 @@ def reopen_reconciliation(actor, reconciliation: FinancialReconciliation, reason
         )
 
         return locked
+
+
+def post_verified_billing_batch_to_account(
+    actor,
+    branch,
+    account: FinancialAccount,
+    start_date,
+    end_date,
+    payment_method_type: str = "CASH",
+) -> dict:
+    """
+    Authoritatively settle verified customer billing collections and completed refunds into a financial account.
+    - Idempotent: checks for prior batch settlement to prevent duplicate postings.
+    - Atomically updates account current_balance by net verified revenue (collections - refunds).
+    - Preserves Phase 05 Billing as the sole authoritative source of truth.
+    - Enforces closed-period check.
+    """
+    if not can_manage_accounts(actor):
+        raise ValidationError(_("You do not have permission to post settlements to financial accounts."))
+
+    if account.branch and account.branch != branch:
+        raise ValidationError({"account": _("Financial account is assigned to a different branch.")})
+
+    check_closed_reconciliation(branch, account, end_date)
+
+    from apps.billing.models import Payment, Refund
+
+    settle_ref = f"SETTLE-{branch.code or branch.id}-{payment_method_type}-{start_date}-{end_date}"
+    if AccountAdjustment.objects.filter(account=account, reason__contains=settle_ref).exists():
+        raise ValidationError(_(f"Batch settlement '{settle_ref}' has already been posted to account '{account.name}'."))
+
+    with transaction.atomic():
+        locked_account = FinancialAccount.objects.select_for_update().get(pk=account.pk)
+
+        payments_qs = Payment.objects.filter(
+            branch=branch,
+            payment_method__method_type=payment_method_type,
+            status=Payment.Status.VERIFIED,
+            paid_at__date__gte=start_date,
+            paid_at__date__lte=end_date,
+        )
+        total_payments = payments_qs.aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+        payment_count = payments_qs.count()
+
+        refunds_qs = Refund.objects.filter(
+            payment__branch=branch,
+            payment__payment_method__method_type=payment_method_type,
+            status=Refund.Status.COMPLETED,
+            completed_at__date__gte=start_date,
+            completed_at__date__lte=end_date,
+        )
+        total_refunds = refunds_qs.aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
+        refund_count = refunds_qs.count()
+
+        net_collections = total_payments - total_refunds
+        if net_collections == Decimal("0.00"):
+            return {
+                "settlement_reference": settle_ref,
+                "payment_count": payment_count,
+                "total_payments": total_payments,
+                "refund_count": refund_count,
+                "total_refunds": total_refunds,
+                "net_collections": Decimal("0.00"),
+                "adjustment": None,
+            }
+
+        adj_type = AccountAdjustment.AdjustmentType.CREDIT if net_collections > Decimal("0.00") else AccountAdjustment.AdjustmentType.DEBIT
+        abs_net = abs(net_collections)
+
+        adj_num = generate_next_finance_number("account_adjustment", "ADJ")
+        adjustment = AccountAdjustment.objects.create(
+            adjustment_number=adj_num,
+            account=locked_account,
+            adjustment_type=adj_type,
+            amount=abs_net,
+            adjustment_date=end_date,
+            reason=f"Authoritative billing settlement [{settle_ref}]: {payment_count} payments ({total_payments} ETB), {refund_count} refunds ({total_refunds} ETB)",
+            performed_by=actor,
+            approved_by=actor,
+        )
+
+        if adj_type == AccountAdjustment.AdjustmentType.CREDIT:
+            locked_account.current_balance += abs_net
+        else:
+            if not locked_account.allow_negative and (locked_account.current_balance - abs_net < Decimal("0.00")):
+                raise ValidationError({"account": _("Debit settlement would cause a negative balance.")})
+            locked_account.current_balance -= abs_net
+        locked_account.save(update_fields=["current_balance", "updated_at"])
+
+        FinanceAuditEvent.objects.create(
+            event_type=FinanceAuditEvent.EventType.ADJUSTMENT_APPLIED,
+            actor=actor,
+            branch=branch,
+            target_type="AccountAdjustment",
+            target_id=str(adjustment.id),
+            action_summary=f"Posted billing settlement {settle_ref} ({net_collections} ETB) into {locked_account.name}",
+            metadata={"settle_ref": settle_ref, "net": str(net_collections)},
+        )
+
+        return {
+            "settlement_reference": settle_ref,
+            "payment_count": payment_count,
+            "total_payments": total_payments,
+            "refund_count": refund_count,
+            "total_refunds": total_refunds,
+            "net_collections": net_collections,
+            "adjustment": adjustment,
+        }

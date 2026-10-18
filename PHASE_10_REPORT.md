@@ -190,10 +190,9 @@ All 10 required reports are registered in `REPORT_REGISTRY`:
 ## 12. Full Test Results
 
 Execution against PostgreSQL test database:
-- **Phase 01–09 Baseline Tests:** 254 passed
-- **Phase 10 Configuration Test:** 5 passed
-- **Phase 10 Comprehensive Finance Suite:** 20 passed
-- **Total Passing Tests:** **274 passed (100%)**
+- **Phase 01–09 Baseline Tests:** 254 passed (including core configuration tests)
+- **Phase 10 Comprehensive Finance Suite (`tests/test_finance.py`):** 23 passed
+- **Total Passing Tests:** **277 passed, 0 failed, 0 skipped, 0 deselected (100% pass rate)** in 672.75s
 
 ### Key Test Categories Covered:
 - Expense categories lifecycle and historical integrity
@@ -202,7 +201,7 @@ Execution against PostgreSQL test database:
 - Branch manager approval limits and self-approval restrictions
 - Partial and full expense payments with balance tracking
 - Idempotent duplicate payment prevention
-- Void expense payment reversals
+- Void expense payment reversals and cancellation modes
 - Internal transfers and revenue neutrality
 - Account adjustments and balance updates
 - Reconciliation workflow, variance explanations, and closed-period locking
@@ -213,6 +212,8 @@ Execution against PostgreSQL test database:
 - Financial overview dashboard permissions
 - Local Ethiopian date and timezone boundaries
 - Negative balance branch policy enforcement
+- Authoritative billing source reconciliation and batch settlement posting
+- Closed-period backdating protections across payments, transfers, and adjustments
 - Concurrent payment serialization under PostgreSQL row locks
 
 ---
@@ -227,6 +228,45 @@ Execution against PostgreSQL test database:
 ## 14. Git Commit Information
 
 - **Branch:** `master`
-- **Commit Hash:** `604c549`
-- **Commit Message:** `feat: implement gym expense and financial management`
-- **Verification Status:** All 274 tests passing (254 baseline regressions + 20 Phase 10 tests), system check clean, zero pending migrations.
+- **Initial Phase 10 Commit:** `604c549` (`feat: implement gym expense and financial management`)
+- **Verification Status:** All 277 tests passing (254 baseline regressions + 23 Phase 10 tests), system check clean, zero pending migrations.
+
+---
+
+## 15. Final Financial Integrity Verification
+
+### 15.1 Reconciled Test Counts
+- **Total Collected & Executed:** 277 tests
+  - `tests/test_finance.py`: 23 tests (added 3 dedicated hardening tests in final verification)
+  - Pre-existing regression suite (Phases 01–09, including `test_configuration.py`): 254 tests
+  - Result: 277 passed, 0 failed, 0 skipped, 0 deselected.
+
+### 15.2 Authoritative Billing-to-Finance Integration
+- **Source of Truth:** Phase 05 Billing (`billing.Payment` and `billing.Refund`) remains the sole authoritative source of truth for customer collections, invoice receipts, and member refunds.
+- **Dynamic Ledger Aggregation:** Financial Overview KPI selectors, Cash Flow Statements, and Income & Expense Reports read verified customer payments (`status=Payment.Status.VERIFIED`) and completed refunds (`status=Refund.Status.COMPLETED`) directly, eliminating parallel ledgers.
+- **Idempotent Batch Settlement Service (`post_verified_billing_batch_to_account`):**
+  - Enables authorized accountants and branch managers to formally post verified customer collections for a date range into a branch `FinancialAccount`.
+  - Atomically calculates net collections ($\sum \text{Payments} - \sum \text{Refunds}$).
+  - Generates a deterministic batch idempotency key (`SETTLE-{branch.code}-{method_type}-{start_date}-{end_date}`) to strictly prevent duplicate batch postings.
+  - Automatically verifies that the posting date is not inside an already closed reconciliation period.
+- **Reconciliation Comparison:** In `conduct_reconciliation`, expected balance calculations automatically reconcile verified billing cash, bank transfers, and digital wallet collections against physical counts.
+
+### 15.3 Expense Payment Void Modes & Reversal Integrity
+- **Void Modes in `void_expense_payment`:**
+  - `restore_account_balance=True` (Default): Re-credits the financial account (`current_balance += amount`) and restores `balance_due` on the expense for cases where cash was returned or an electronic transaction was reversed.
+  - `restore_account_balance=False`: Administrative cancellation of an erroneous posting where funds never physically left the account or were written off, strictly preventing false artificial cash/bank balance inflation.
+- **Concurrency & Duplicate Prevention:** Utilizes pessimistic row locking (`select_for_update()`) on both `ExpensePayment` and `FinancialAccount`. Duplicate or concurrent void calls on an already voided payment immediately abort with `ValidationError("Only verified payments can be voided.")`.
+
+### 15.4 Closed-Period Integrity & Immutability
+- **Backdating Guards (`check_closed_reconciliation`):**
+  - Integrated into `record_expense_payment`, `void_expense_payment`, `transfer_funds`, `perform_account_adjustment`, and `post_verified_billing_batch_to_account`.
+  - If a transaction date falls inside an `APPROVED_CLOSED` reconciliation period for that branch or account, the operation is blocked with a descriptive `ValidationError`.
+  - Enforces the core accounting control that historical closed periods cannot be silently mutated; adjustments must be booked in an open period.
+- **Model and Admin Immutability:**
+  - `FinancialReconciliation.clean()` enforces that monetary fields and period dates cannot be altered once a reconciliation is closed.
+  - `FinancialReconciliation.delete()` prevents deletion of closed reconciliation records.
+  - `FinancialReconciliationAdmin` marks all fields readonly and disables delete actions for closed records.
+- **Reopening Protocol (`reopen_reconciliation`):**
+  - Restricted strictly to Gym Owners and Superusers.
+  - Requires a mandatory justification reason and creates an immutable `RECONCILIATION_REOPENED` audit event.
+

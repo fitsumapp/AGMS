@@ -406,6 +406,16 @@ class FinancialReconciliationAdmin(ModelAdmin):
                 self.message_user(request, f"{rec.reconciliation_number}: {e}", level=messages.ERROR)
         self.message_user(request, f"Closed {count} reconciliation period(s).", level=messages.SUCCESS)
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == FinancialReconciliation.Status.APPROVED_CLOSED:
+            return [f.name for f in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == FinancialReconciliation.Status.APPROVED_CLOSED:
+            return False
+        return super().has_delete_permission(request, obj)
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser or is_owner(request.user):
