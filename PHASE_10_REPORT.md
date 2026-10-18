@@ -191,8 +191,8 @@ All 10 required reports are registered in `REPORT_REGISTRY`:
 
 Execution against PostgreSQL test database:
 - **Phase 01–09 Baseline Tests:** 254 passed (including core configuration tests)
-- **Phase 10 Comprehensive Finance Suite (`tests/test_finance.py`):** 23 passed
-- **Total Passing Tests:** **277 passed, 0 failed, 0 skipped, 0 deselected (100% pass rate)** in 672.75s
+- **Phase 10 Comprehensive Finance Suite (`tests/test_finance.py`):** 24 passed
+- **Total Passing Tests:** **278 passed, 0 failed, 0 skipped, 0 deselected (100% pass rate)** in 690.28s
 
 ### Key Test Categories Covered:
 - Expense categories lifecycle and historical integrity
