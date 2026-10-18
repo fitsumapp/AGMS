@@ -241,8 +241,9 @@ PostgreSQL transactional concurrency was verified with multi-threaded tests usin
 
 ### 19. Git Commit Hash
 
-- Commit hash: `0964bc3`
-- Commit message: `feat: implement gym classes scheduling and member booking`
+- Master implementation commit: `0964bc3`
+- Hardening & verification commit: `9883399`
+- Commit message: `fix(classes): harden waitlist concurrency, weekly limits, and scheduling locks`
 - All files staged and committed cleanly.
 
 ---
