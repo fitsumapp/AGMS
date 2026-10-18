@@ -223,7 +223,8 @@ def create_purchase_order(
         subtotal = Decimal("0.00")
         for item in items_data:
             product = item["product"]
-            qty = Decimal(str(item["quantity"]))
+            raw_qty = item.get("quantity") if "quantity" in item else item.get("quantity_ordered")
+            qty = Decimal(str(raw_qty))
             unit_cost = Decimal(str(item.get("unit_cost", product.cost_price)))
             total_cost = (qty * unit_cost).quantize(Decimal("0.01"))
 
@@ -274,10 +275,12 @@ def receive_goods_note(
     create_expense_liability: bool = True,
     expense_category: Optional[ExpenseCategory] = None,
     notes: str = "",
+    idempotency_key: Optional[str] = None,
 ) -> GoodsReceivedNote:
     """
     Intake physical inventory, adjust stock counts, update PO fulfillment,
     and create integrated Phase 10 unpaid Expense liability for the supplier.
+    Enforces idempotency and concurrent over-receiving protection.
     """
     if not can_manage_inventory(actor):
         raise ValidationError(_("You do not have permission to receive inventory."))
@@ -285,17 +288,33 @@ def receive_goods_note(
     if not items_data:
         raise ValidationError(_("Goods Received Note must have at least one item."))
 
+    if idempotency_key:
+        existing = GoodsReceivedNote.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            return existing
+
+    delivery_ref_clean = delivery_note_reference.strip()
+    if delivery_ref_clean and GoodsReceivedNote.objects.filter(supplier=supplier, delivery_note_reference=delivery_ref_clean).exists():
+        raise ValidationError(_(f"A Goods Received Note with delivery note reference '{delivery_ref_clean}' already exists for supplier '{supplier.name}'."))
+
     with transaction.atomic():
+        locked_po = None
+        if purchase_order:
+            locked_po = PurchaseOrder.objects.select_for_update().get(pk=purchase_order.pk)
+            if locked_po.status not in (PurchaseOrder.Status.APPROVED, PurchaseOrder.Status.PARTIALLY_RECEIVED):
+                raise ValidationError(_(f"Cannot receive items against Purchase Order in '{locked_po.get_status_display()}' status."))
+
         grn_num = generate_next_inventory_number("goods_received_note", "GRN")
         grn = GoodsReceivedNote.objects.create(
             grn_number=grn_num,
-            purchase_order=purchase_order,
+            purchase_order=locked_po,
             branch=branch,
             supplier=supplier,
             received_date=timezone.localdate(),
-            delivery_note_reference=delivery_note_reference,
+            delivery_note_reference=delivery_ref_clean,
             received_by=actor,
             notes=notes,
+            idempotency_key=idempotency_key or "",
         )
 
         total_intake_cost = Decimal("0.00")
@@ -303,16 +322,25 @@ def receive_goods_note(
         for item in items_data:
             product = item["product"]
             qty = Decimal(str(item["quantity"]))
+            if qty <= Decimal("0.00"):
+                raise ValidationError(_("Received quantity must be strictly positive."))
             unit_cost = Decimal(str(item.get("unit_cost", product.cost_price)))
             total_cost = (qty * unit_cost).quantize(Decimal("0.01"))
             batch_num = item.get("batch_number", "")
             exp_date = item.get("expiry_date")
             po_item = item.get("po_item")
 
+            locked_po_item = None
+            if po_item:
+                locked_po_item = PurchaseOrderItem.objects.select_for_update().get(pk=po_item.pk)
+                if locked_po_item.quantity_received + qty > locked_po_item.quantity_ordered:
+                    rem = max(Decimal("0.00"), locked_po_item.quantity_ordered - locked_po_item.quantity_received)
+                    raise ValidationError(_(f"Cannot receive {qty} for '{product.name}'. Remaining on PO: {rem}."))
+
             GoodsReceivedItem.objects.create(
                 grn=grn,
                 product=product,
-                po_item=po_item,
+                po_item=locked_po_item,
                 quantity_received=qty,
                 unit_cost=unit_cost,
                 total_cost=total_cost,
@@ -333,22 +361,22 @@ def receive_goods_note(
             )
 
             # Update PO item if linked
-            if po_item:
-                po_item.quantity_received += qty
-                po_item.save(update_fields=["quantity_received", "updated_at"])
+            if locked_po_item:
+                locked_po_item.quantity_received += qty
+                locked_po_item.save(update_fields=["quantity_received", "updated_at"])
 
             total_intake_cost += total_cost
 
         # Update PO overall status if linked
-        if purchase_order:
-            all_items = purchase_order.items.all()
+        if locked_po:
+            all_items = locked_po.items.all()
             all_fulfilled = all(it.quantity_received >= it.quantity_ordered for it in all_items)
             any_fulfilled = any(it.quantity_received > Decimal("0.00") for it in all_items)
             if all_fulfilled:
-                purchase_order.status = PurchaseOrder.Status.RECEIVED
+                locked_po.status = PurchaseOrder.Status.RECEIVED
             elif any_fulfilled:
-                purchase_order.status = PurchaseOrder.Status.PARTIALLY_RECEIVED
-            purchase_order.save(update_fields=["status", "updated_at"])
+                locked_po.status = PurchaseOrder.Status.PARTIALLY_RECEIVED
+            locked_po.save(update_fields=["status", "updated_at"])
 
         # Create integrated Phase 10 Expense liability (WITHOUT automatically marking paid)
         if create_expense_liability and total_intake_cost > Decimal("0.00"):
@@ -360,7 +388,7 @@ def receive_goods_note(
                     branch=branch,
                     category=category,
                     supplier=supplier,
-                    description=f"Inventory procurement: {grn_num} ({delivery_note_reference})",
+                    description=f"Inventory procurement: {grn_num} ({delivery_ref_clean})",
                     amount=total_intake_cost,
                     tax_amount=Decimal("0.00"),
                     total_amount=total_intake_cost,
@@ -375,6 +403,93 @@ def receive_goods_note(
                 grn.save(update_fields=["expense_record"])
 
         return grn
+
+
+def process_purchase_return(
+    actor,
+    grn: GoodsReceivedNote,
+    items_data: List[Dict[str, Any]],
+    reason: str,
+    notes: str = "",
+) -> Dict[str, Any]:
+    """
+    Process return of received goods to supplier.
+    Atomically reverses inventory stock and decreases linked Phase 10 Expense liability.
+    """
+    if not can_manage_inventory(actor):
+        raise ValidationError(_("You do not have permission to process purchase returns."))
+    if not reason or not reason.strip():
+        raise ValidationError(_("A reason is mandatory for purchase returns."))
+    if not items_data:
+        raise ValidationError(_("Purchase return must specify at least one item."))
+
+    with transaction.atomic():
+        locked_grn = GoodsReceivedNote.objects.select_for_update().get(pk=grn.pk)
+        grn_items_map = {it.id: it for it in locked_grn.items.select_for_update()}
+
+        total_return_cost = Decimal("0.00")
+        processed_items = []
+
+        for ret in items_data:
+            grn_item_id = ret["grn_item_id"]
+            grn_item = grn_items_map.get(grn_item_id)
+            if not grn_item:
+                raise ValidationError(_("Invalid GRN item specified for return."))
+
+            qty = Decimal(str(ret["quantity"]))
+            if qty <= Decimal("0.00"):
+                raise ValidationError(_("Return quantity must be strictly positive."))
+            if qty > grn_item.quantity_received:
+                raise ValidationError(_(f"Cannot return {qty} of '{grn_item.product.name}'. Received: {grn_item.quantity_received}."))
+
+            line_cost = (qty * grn_item.unit_cost).quantize(Decimal("0.01"))
+            total_return_cost += line_cost
+
+            # Deduct stock
+            adjust_stock(
+                actor=actor,
+                branch=locked_grn.branch,
+                product=grn_item.product,
+                quantity_change=-qty,
+                movement_type=StockMovement.MovementType.PURCHASE_RETURN,
+                reference=f"RET-{locked_grn.grn_number}",
+                notes=f"Purchase return to {locked_grn.supplier.name}: {reason.strip()}",
+                unit_cost=grn_item.unit_cost,
+            )
+
+            # Update PO item if linked
+            if grn_item.po_item:
+                po_it = PurchaseOrderItem.objects.select_for_update().get(pk=grn_item.po_item.pk)
+                po_it.quantity_received = max(Decimal("0.00"), po_it.quantity_received - qty)
+                po_it.save(update_fields=["quantity_received", "updated_at"])
+
+            processed_items.append({"product": grn_item.product.name, "quantity": qty, "cost": line_cost})
+
+        # Adjust linked Expense liability if present
+        if locked_grn.expense_record:
+            exp = Expense.objects.select_for_update().get(pk=locked_grn.expense_record.pk)
+            new_amount = max(Decimal("0.00"), exp.total_amount - total_return_cost)
+            exp.amount = new_amount
+            exp.total_amount = new_amount
+            exp.balance_due = max(Decimal("0.00"), exp.balance_due - total_return_cost)
+            exp.description = f"{exp.description}\nPurchase return {locked_grn.grn_number}: -{total_return_cost} ETB ({reason.strip()})".strip()
+            exp.save(update_fields=["amount", "total_amount", "balance_due", "description", "updated_at"])
+
+        FinanceAuditEvent.objects.create(
+            event_type=FinanceAuditEvent.EventType.ADJUSTMENT_APPLIED,
+            actor=actor,
+            branch=locked_grn.branch,
+            target_type="GoodsReceivedNote",
+            target_id=str(locked_grn.id),
+            action_summary=f"Purchase return on GRN {locked_grn.grn_number} to {locked_grn.supplier.name} for {total_return_cost} ETB. Reason: {reason}",
+            metadata={"grn_number": locked_grn.grn_number, "total_return_cost": str(total_return_cost), "reason": reason},
+        )
+
+        return {
+            "grn": locked_grn,
+            "total_returned_cost": total_return_cost,
+            "items": processed_items,
+        }
 
 
 # -----------------------------------------------------------------------------
@@ -735,15 +850,17 @@ def process_pos_checkout(
     discount_authorizer=None,
     shift: Optional[CashierShift] = None,
     notes: str = "",
+    idempotency_key: Optional[str] = None,
 ) -> Sale:
     """
     Execute atomic POS checkout:
-    1. Lock stock items to serialize concurrent sales of the same items.
-    2. Check stock availability (negative stock strictly disallowed).
-    3. Apply discount authorization rules.
-    4. Compute taxes, item snapshots, and payment tenders.
-    5. Deduct inventory via SALE_DEDUCTION.
-    6. Generate durable Sale, SaleItems, SalePayments, and SaleReceipt.
+    1. Check idempotency to prevent duplicate sales.
+    2. Lock stock items to serialize concurrent sales of the same items.
+    3. Check stock availability (negative stock strictly disallowed).
+    4. Server-side price tampering and discount authorization enforcement.
+    5. Cashier cash confirmation vs unverified electronic reference entry.
+    6. Deduct inventory via SALE_DEDUCTION.
+    7. Generate durable Sale, SaleItems, SalePayments, and SaleReceipt.
     """
     if not can_operate_pos(actor):
         raise ValidationError(_("You do not have permission to operate the POS."))
@@ -753,6 +870,11 @@ def process_pos_checkout(
 
     if not payments_data:
         raise ValidationError(_("At least one payment method tender is required."))
+
+    if idempotency_key:
+        existing = Sale.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            return existing
 
     discount = Decimal(str(discount_amount)) if discount_amount else Decimal("0.00")
     if discount > Decimal("0.00"):
@@ -783,6 +905,13 @@ def process_pos_checkout(
             product = products_dict[prod_id]
             qty = Decimal(str(item["quantity"]))
             unit_price = Decimal(str(item.get("unit_price", product.selling_price)))
+
+            # Server-side price tampering check
+            if unit_price != product.selling_price:
+                if not (discount_authorizer or can_authorize_discount(actor)):
+                    raise ValidationError(
+                        _(f"Price override for '{product.name}' ({unit_price} vs regular {product.selling_price} ETB) requires manager authorization.")
+                    )
 
             stock_item = stock_map.get(prod_id)
             available = stock_item.quantity_on_hand if stock_item else Decimal("0.00")
@@ -821,19 +950,73 @@ def process_pos_checkout(
 
         # Validate payments
         total_tendered = Decimal("0.00")
-        total_paid = Decimal("0.00")
+        total_paid_tendered = Decimal("0.00")
         for pay in payments_data:
             amt = Decimal(str(pay["amount"]))
             tendered = Decimal(str(pay.get("tendered_amount", amt)))
             total_tendered += tendered
-            total_paid += amt
+            total_paid_tendered += amt
 
-        if total_paid < total_due:
+        if total_paid_tendered < total_due:
             raise ValidationError(
-                _(f"Total paid ({total_paid} ETB) is less than amount due ({total_due} ETB).")
+                _(f"Total paid ({total_paid_tendered} ETB) is less than amount due ({total_due} ETB).")
             )
 
         change_amt = max(Decimal("0.00"), total_tendered - total_due)
+
+        # Process and verify payments
+        payments_to_create = []
+        total_verified = Decimal("0.00")
+
+        for pay in payments_data:
+            pm = pay["payment_method"]
+            amt = Decimal(str(pay["amount"]))
+            tendered = Decimal(str(pay.get("tendered_amount", amt)))
+            chg = Decimal(str(pay.get("change_amount", Decimal("0.00"))))
+            ref = pay.get("reference", "").strip()
+
+            is_cash = getattr(pm, "method_type", None) == "CASH" or getattr(pm, "name", "").upper() == "CASH"
+            cashier_confirmed = pay.get("cashier_confirmed", True if is_cash else False)
+
+            is_ver = False
+            ver_by = None
+            ver_at = None
+
+            if is_cash and cashier_confirmed:
+                # Cash payments follow explicit cashier confirmation
+                is_ver = True
+                ver_by = actor
+                ver_at = timezone.now()
+            elif pay.get("is_verified") is True:
+                # Electronic/bank can ONLY be marked verified if explicitly verified by an authorized supervisor
+                ver_candidate = pay.get("verified_by", actor)
+                if can_authorize_refund(ver_candidate) or can_settle_pos_to_finance(ver_candidate) or getattr(ver_candidate, "role", None) in ["GYM_OWNER", "BRANCH_MANAGER", "ACCOUNTANT"]:
+                    is_ver = True
+                    ver_by = ver_candidate
+                    ver_at = timezone.now()
+                else:
+                    is_ver = False
+
+            if is_ver:
+                total_verified += amt
+
+            payments_to_create.append({
+                "payment_method": pm,
+                "amount": amt,
+                "tendered_amount": tendered,
+                "change_amount": chg,
+                "reference": ref,
+                "is_verified": is_ver,
+                "verified_at": ver_at,
+                "verified_by": ver_by,
+            })
+
+        if total_verified >= total_due:
+            pay_status = Sale.PaymentStatus.PAID
+        elif total_verified > Decimal("0.00"):
+            pay_status = Sale.PaymentStatus.PARTIALLY_PAID
+        else:
+            pay_status = Sale.PaymentStatus.UNPAID
 
         # Create Sale
         sale_num = generate_next_inventory_number("sale", "SALE")
@@ -846,16 +1029,17 @@ def process_pos_checkout(
             customer_name=customer_name.strip() if customer_name else "Walk-in Customer",
             customer_phone=customer_phone.strip(),
             status=Sale.Status.COMPLETED,
-            payment_status=Sale.PaymentStatus.PAID,
+            payment_status=pay_status,
             subtotal=subtotal,
             discount_amount=discount,
             discount_reason=discount_reason.strip(),
             discount_authorized_by=discount_authorizer,
             tax_amount=total_tax,
             total_amount=total_due,
-            paid_amount=total_due,
+            paid_amount=total_verified,
             change_amount=change_amt,
             notes=notes,
+            idempotency_key=idempotency_key or "",
             completed_at=timezone.now(),
         )
 
@@ -884,25 +1068,17 @@ def process_pos_checkout(
             )
 
         # Record Payments
-        for pay in payments_data:
-            pm = pay["payment_method"]
-            amt = Decimal(str(pay["amount"]))
-            tendered = Decimal(str(pay.get("tendered_amount", amt)))
-            chg = Decimal(str(pay.get("change_amount", Decimal("0.00"))))
-            ref = pay.get("reference", "")
-
-            # If payment method is CASH, automatically verified. Electronic methods verified if reference supplied or marked
-            is_ver = pay.get("is_verified", True)
+        for pdata in payments_to_create:
             SalePayment.objects.create(
                 sale=sale,
-                payment_method=pm,
-                amount=amt,
-                tendered_amount=tendered,
-                change_amount=chg,
-                reference=ref,
-                is_verified=is_ver,
-                verified_at=timezone.now() if is_ver else None,
-                verified_by=actor if is_ver else None,
+                payment_method=pdata["payment_method"],
+                amount=pdata["amount"],
+                tendered_amount=pdata["tendered_amount"],
+                change_amount=pdata["change_amount"],
+                reference=pdata["reference"],
+                is_verified=pdata["is_verified"],
+                verified_at=pdata["verified_at"],
+                verified_by=pdata["verified_by"],
             )
 
         # Generate digital/thermal receipt snapshot
@@ -946,6 +1122,53 @@ def process_pos_checkout(
         return sale
 
 
+def verify_pos_payment(
+    actor,
+    payment: SalePayment,
+    is_verified: bool,
+    notes: str = "",
+    rejection_reason: str = "",
+) -> SalePayment:
+    """
+    Authorized manual verification for digital/bank POS payments with audit trail.
+    """
+    if not (can_authorize_refund(actor) or can_settle_pos_to_finance(actor) or getattr(actor, "role", None) in ["GYM_OWNER", "BRANCH_MANAGER", "ACCOUNTANT"]):
+        raise ValidationError(_("You do not have permission to verify or reject POS payments."))
+
+    with transaction.atomic():
+        locked_payment = SalePayment.objects.select_for_update().get(pk=payment.pk)
+        sale = Sale.objects.select_for_update().get(pk=locked_payment.sale_id)
+
+        locked_payment.is_verified = is_verified
+        locked_payment.verified_by = actor if is_verified else None
+        locked_payment.verified_at = timezone.now() if is_verified else None
+        locked_payment.verification_notes = notes.strip()
+        locked_payment.rejection_reason = rejection_reason.strip() if not is_verified else ""
+        locked_payment.save(update_fields=["is_verified", "verified_by", "verified_at", "verification_notes", "rejection_reason", "updated_at"])
+
+        # Recalculate sale paid_amount and status
+        tot_verified = sale.payments.filter(is_verified=True).aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+        sale.paid_amount = tot_verified
+        if tot_verified >= sale.total_amount:
+            sale.payment_status = Sale.PaymentStatus.PAID
+        elif tot_verified > Decimal("0.00"):
+            sale.payment_status = Sale.PaymentStatus.PARTIALLY_PAID
+        else:
+            sale.payment_status = Sale.PaymentStatus.UNPAID
+        sale.save(update_fields=["paid_amount", "payment_status", "updated_at"])
+
+        FinanceAuditEvent.objects.create(
+            event_type=FinanceAuditEvent.EventType.PAYMENT_RECORDED,
+            actor=actor,
+            branch=sale.branch,
+            target_type="SalePayment",
+            target_id=str(locked_payment.id),
+            action_summary=f"POS payment {locked_payment.id} for sale {sale.sale_number} ({locked_payment.amount} ETB via {locked_payment.payment_method.name}) set to verified={is_verified}. Notes: {notes}",
+            metadata={"sale_number": sale.sale_number, "amount": str(locked_payment.amount), "is_verified": is_verified, "notes": notes},
+        )
+        return locked_payment
+
+
 # -----------------------------------------------------------------------------
 # 7. Sales Returns & Customer Refunds
 # -----------------------------------------------------------------------------
@@ -962,6 +1185,7 @@ def process_sale_return(
     """
     Process return and refund for completed POS sale.
     Validates returnable quantities and optionally restocks inventory.
+    Enforces that cumulative refunds cannot exceed verified payments received.
     """
     if not can_authorize_refund(authorizer):
         raise ValidationError(_("Refunds must be authorized by a Branch Manager or Owner."))
@@ -975,6 +1199,13 @@ def process_sale_return(
     with transaction.atomic():
         sale = Sale.objects.select_for_update().get(pk=sale.pk)
         sale_items_map = {item.id: item for item in sale.items.select_for_update()}
+
+        # Verify that cumulative refunds do not exceed verified paid amount
+        previously_refunded = (
+            SaleReturn.objects.filter(sale=sale, status=SaleReturn.Status.COMPLETED)
+            .aggregate(s=Sum("refund_amount"))["s"]
+            or Decimal("0.00")
+        )
 
         total_refund = Decimal("0.00")
         items_to_restock = []
@@ -1031,6 +1262,11 @@ def process_sale_return(
 
             if should_restock:
                 items_to_restock.append((sale_item.product, qty))
+
+        if previously_refunded + total_refund > sale.paid_amount:
+            raise ValidationError(
+                _(f"Total refunds ({previously_refunded + total_refund} ETB) cannot exceed actual verified paid amount ({sale.paid_amount} ETB).")
+            )
 
         sale_return.refund_amount = total_refund
         sale_return.save(update_fields=["refund_amount"])

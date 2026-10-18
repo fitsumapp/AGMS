@@ -16,6 +16,7 @@ from apps.finance.models import (
     AccountAdjustment,
     Expense,
     ExpenseCategory,
+    FinanceAuditEvent,
     FinancialAccount,
     FinancialReconciliation,
     Supplier,
@@ -75,12 +76,14 @@ from apps.inventory.services import (
     open_cashier_shift,
     post_verified_pos_settlement_to_account,
     process_pos_checkout,
+    process_purchase_return,
     process_sale_return,
     receive_goods_note,
     receive_stock_transfer,
     reconcile_stock_count,
     record_stock_count,
     submit_purchase_order,
+    verify_pos_payment,
 )
 from apps.members.models import Member
 
@@ -583,8 +586,26 @@ def test_pos_checkout_multi_tender_and_receipt(test_branches, test_users, test_p
     assert sale.subtotal == Decimal("390.00")
     assert sale.discount_amount == Decimal("40.00")
     assert sale.total_amount == Decimal("350.00")
-    assert sale.paid_amount == Decimal("350.00")
+
+    # Split tender verification behavior:
+    # Cash payment (200 ETB) is verified by cashier confirmation.
+    # Telebirr payment (150 ETB with reference) is PENDING until explicitly verified by manager.
+    assert sale.paid_amount == Decimal("200.00")
+    assert sale.payment_status == Sale.PaymentStatus.PARTIALLY_PAID
     assert sale.change_amount == Decimal("50.00")
+
+    # Verify Telebirr payment via authorized manager
+    tele_pay = sale.payments.get(payment_method=pm_telebirr)
+    assert tele_pay.is_verified is False
+    verify_pos_payment(actor=test_users["mgr_bole"], payment=tele_pay, is_verified=True, notes="Confirmed via Telebirr merchant portal")
+
+    tele_pay.refresh_from_db()
+    assert tele_pay.is_verified is True
+    assert tele_pay.verified_by == test_users["mgr_bole"]
+
+    sale.refresh_from_db()
+    assert sale.paid_amount == Decimal("350.00")
+    assert sale.payment_status == Sale.PaymentStatus.PAID
 
     # Inventory was cleanly deducted
     assert get_or_create_stock_item(b1, p_water).quantity_on_hand == Decimal("18.00")
@@ -1018,3 +1039,342 @@ def test_all_pos_and_inventory_reports_extract(test_branches, test_users, test_p
     resp = export_report_to_csv(r1, "pos_daily_sales")
     assert resp.status_code == 200
     assert resp["Content-Type"].startswith("text/csv")
+
+
+# =============================================================================
+# 15. POS Payment Hardening: Unverified Digital Tenders & Audit Trail
+# =============================================================================
+
+def test_pos_electronic_payment_unverified_by_reference(test_branches, test_users, test_payment_methods, test_category, test_finance_account):
+    """
+    Entering a transaction reference for Telebirr/CBE Birr does NOT verify the payment.
+    The payment remains pending until explicitly verified by an authorized manager/accountant.
+    Unverified payments are excluded from financial settlement.
+    """
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    cashier = test_users["pos_staff"]
+    accountant = test_users["accountant"]
+    trainer = test_users["trainer"]
+    pm_telebirr = test_payment_methods["telebirr"]
+
+    prod = create_product(
+        actor=owner,
+        name="Creatine Monohydrate 300g",
+        sku="CREAT-300",
+        category=test_category,
+        unit_of_measurement=Product.Unit.PCS,
+        cost_price=Decimal("400.00"),
+        selling_price=Decimal("700.00"),
+    )
+    adjust_stock(owner, b1, prod, Decimal("10.00"), StockMovement.MovementType.OPENING_STOCK, "INIT")
+
+    sale = process_pos_checkout(
+        actor=cashier,
+        branch=b1,
+        items_data=[{"product": prod, "quantity": 1}],
+        payments_data=[{"payment_method": pm_telebirr, "amount": Decimal("700.00"), "reference": "TELE-REF-999"}],
+    )
+
+    pay = sale.payments.first()
+    assert pay.is_verified is False
+    assert pay.reference == "TELE-REF-999"
+    assert sale.paid_amount == Decimal("0.00")
+    assert sale.payment_status == Sale.PaymentStatus.UNPAID
+
+    # 1. Unauthorized user (trainer) cannot verify payment
+    with pytest.raises(ValidationError):
+        verify_pos_payment(actor=trainer, payment=pay, is_verified=True, notes="Attempt by trainer")
+
+    # 2. Unverified payment cannot be settled into financial account
+    today = timezone.localdate()
+    with pytest.raises(ValidationError) as exc:
+        post_verified_pos_settlement_to_account(
+            actor=accountant,
+            branch=b1,
+            account=test_finance_account,
+            start_date=today,
+            end_date=today,
+            payment_method_type="TELEBIRR",
+        )
+    assert "No unsettled verified POS TELEBIRR transactions found" in str(exc.value)
+
+    # 3. Authorized verification by accountant/manager
+    verify_pos_payment(actor=accountant, payment=pay, is_verified=True, notes="Verified on CBE/Telebirr portal")
+    pay.refresh_from_db()
+    assert pay.is_verified is True
+    assert pay.verified_by == accountant
+
+    sale.refresh_from_db()
+    assert sale.paid_amount == Decimal("700.00")
+    assert sale.payment_status == Sale.PaymentStatus.PAID
+
+    # 4. Audit trail event verified
+    audit_event = FinanceAuditEvent.objects.filter(
+        target_type="SalePayment",
+        target_id=str(pay.id),
+    ).first()
+    assert audit_event is not None
+    assert audit_event.actor == accountant
+
+
+# =============================================================================
+# 16. Server-Side Price Tampering Prevention & Checkout Idempotency
+# =============================================================================
+
+def test_pos_price_tampering_rejection_and_idempotency(test_branches, test_users, test_payment_methods, test_category):
+    """
+    Cashier cannot tamper with unit prices below catalog selling price without authorization.
+    Repeating checkout with the same idempotency_key returns the existing Sale without double-deduction.
+    """
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    cashier = test_users["pos_staff"]
+    pm_cash = test_payment_methods["cash"]
+
+    prod = create_product(
+        actor=owner,
+        name="L-Carnitine Liquid",
+        sku="CARN-LQD",
+        category=test_category,
+        unit_of_measurement=Product.Unit.BOTTLE,
+        cost_price=Decimal("300.00"),
+        selling_price=Decimal("600.00"),
+    )
+    adjust_stock(owner, b1, prod, Decimal("10.00"), StockMovement.MovementType.OPENING_STOCK, "INIT")
+
+    # 1. Price tampering attempt by cashier (attempting to charge 100 instead of 600)
+    with pytest.raises(ValidationError) as exc:
+        process_pos_checkout(
+            actor=cashier,
+            branch=b1,
+            items_data=[{"product": prod, "quantity": 1, "unit_price": Decimal("100.00")}],
+            payments_data=[{"payment_method": pm_cash, "amount": Decimal("100.00")}],
+        )
+    assert "requires manager authorization" in str(exc.value)
+
+    # 2. Idempotency test: checkout with idempotency key
+    sale1 = process_pos_checkout(
+        actor=cashier,
+        branch=b1,
+        items_data=[{"product": prod, "quantity": 1}],
+        payments_data=[{"payment_method": pm_cash, "amount": Decimal("600.00")}],
+        idempotency_key="IDEMP-POS-001",
+    )
+    assert get_or_create_stock_item(b1, prod).quantity_on_hand == Decimal("9.00")
+
+    # Resubmitting with same idempotency key returns same sale, stock untouched
+    sale2 = process_pos_checkout(
+        actor=cashier,
+        branch=b1,
+        items_data=[{"product": prod, "quantity": 1}],
+        payments_data=[{"payment_method": pm_cash, "amount": Decimal("600.00")}],
+        idempotency_key="IDEMP-POS-001",
+    )
+    assert sale1.id == sale2.id
+    assert get_or_create_stock_item(b1, prod).quantity_on_hand == Decimal("9.00")
+
+
+# =============================================================================
+# 17. Purchasing Concurrency, Over-Receiving & Duplicate GRN Rejection
+# =============================================================================
+
+def test_purchasing_concurrency_and_over_receiving_prevention(test_branches, test_users, test_supplier, test_category):
+    """
+    Prevents over-receiving a Purchase Order even under concurrent attempts.
+    Rejects duplicate GRNs with the same delivery reference.
+    """
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    mgr = test_users["mgr_bole"]
+
+    prod = create_product(
+        actor=owner,
+        name="Mass Gainer 5kg",
+        sku="MASS-5KG",
+        category=test_category,
+        unit_of_measurement=Product.Unit.PCS,
+        cost_price=Decimal("1800.00"),
+        selling_price=Decimal("2500.00"),
+    )
+
+    po = create_purchase_order(
+        actor=mgr,
+        branch=b1,
+        supplier=test_supplier,
+        items_data=[{"product": prod, "quantity_ordered": Decimal("5.00"), "unit_cost": Decimal("1800.00")}],
+    )
+    submit_purchase_order(mgr, po)
+    approve_purchase_order(owner, po)
+    po_item = po.items.first()
+
+    # 1. Partial receipt of 3 units
+    grn1 = receive_goods_note(
+        actor=mgr,
+        branch=b1,
+        supplier=test_supplier,
+        purchase_order=po,
+        items_data=[{"product": prod, "quantity": Decimal("3.00"), "po_item": po_item}],
+        delivery_note_reference="DN-BATCH-1",
+    )
+    po.refresh_from_db()
+    po_item.refresh_from_db()
+    assert po_item.quantity_received == Decimal("3.00")
+    assert po.status == PurchaseOrder.Status.PARTIALLY_RECEIVED
+
+    # 2. Attempting to receive 3 more when only 2 remain must fail with ValidationError
+    with pytest.raises(ValidationError) as exc:
+        receive_goods_note(
+            actor=mgr,
+            branch=b1,
+            supplier=test_supplier,
+            purchase_order=po,
+            items_data=[{"product": prod, "quantity": Decimal("3.00"), "po_item": po_item}],
+            delivery_note_reference="DN-BATCH-2",
+        )
+    assert "Remaining on PO: 2" in str(exc.value)
+
+    # 3. Duplicate delivery note reference rejection
+    with pytest.raises(ValidationError) as exc:
+        receive_goods_note(
+            actor=mgr,
+            branch=b1,
+            supplier=test_supplier,
+            items_data=[{"product": prod, "quantity": Decimal("1.00")}],
+            delivery_note_reference="DN-BATCH-1",
+        )
+    assert "already exists for supplier" in str(exc.value)
+
+
+# =============================================================================
+# 18. Purchase Returns: Inventory Reversal & Expense Liability Reduction
+# =============================================================================
+
+def test_purchase_return_workflow_and_expense_reversal(test_branches, test_users, test_supplier, test_category):
+    """
+    Processing a purchase return to supplier reverses inventory stock and
+    atomically decrements the linked Phase 10 unpaid Expense obligation.
+    """
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    mgr = test_users["mgr_bole"]
+
+    prod = create_product(
+        actor=owner,
+        name="Pre-Workout Powder 300g",
+        sku="PRE-300G",
+        category=test_category,
+        unit_of_measurement=Product.Unit.PCS,
+        cost_price=Decimal("500.00"),
+        selling_price=Decimal("900.00"),
+    )
+
+    # Receive 10 units = 5,000 ETB
+    grn = receive_goods_note(
+        actor=mgr,
+        branch=b1,
+        supplier=test_supplier,
+        items_data=[{"product": prod, "quantity": Decimal("10.00"), "unit_cost": Decimal("500.00")}],
+        delivery_note_reference="DN-PRE-001",
+        create_expense_liability=True,
+    )
+    assert grn.expense_record is not None
+    exp = grn.expense_record
+    assert exp.total_amount == Decimal("5000.00")
+    assert exp.balance_due == Decimal("5000.00")
+    assert get_or_create_stock_item(b1, prod).quantity_on_hand == Decimal("10.00")
+
+    grn_item = grn.items.first()
+
+    # Return 3 units (1,500 ETB) due to damaged seals
+    ret_res = process_purchase_return(
+        actor=mgr,
+        grn=grn,
+        items_data=[{"grn_item_id": grn_item.id, "quantity": Decimal("3.00")}],
+        reason="Damaged seals upon inspection",
+    )
+    assert ret_res["total_returned_cost"] == Decimal("1500.00")
+
+    # Inventory is reduced to 7
+    assert get_or_create_stock_item(b1, prod).quantity_on_hand == Decimal("7.00")
+
+    # Expense liability atomically reduced to 3,500 ETB
+    exp.refresh_from_db()
+    assert exp.total_amount == Decimal("3500.00")
+    assert exp.balance_due == Decimal("3500.00")
+
+    # Movement logged
+    mov = StockMovement.objects.filter(reference=f"RET-{grn.grn_number}").first()
+    assert mov is not None
+    assert mov.movement_type == StockMovement.MovementType.PURCHASE_RETURN
+    assert mov.quantity_change == Decimal("-3.00")
+
+
+# =============================================================================
+# 19. Refund Integrity: Limit to Verified Paid Collections & Concurrency
+# =============================================================================
+
+@pytest.mark.django_db(transaction=True)
+def test_sale_refund_limits_and_concurrency(test_branches, test_users, test_payment_methods, test_category):
+    """
+    1. Cumulative refunds cannot exceed verified payments received.
+    2. Concurrent refund threads serialize safely and cannot over-refund a sale.
+    """
+    b1, _ = test_branches
+    owner = test_users["owner"]
+    mgr = test_users["mgr_bole"]
+    cashier = test_users["pos_staff"]
+    pm_cash = test_payment_methods["cash"]
+
+    prod = create_product(
+        actor=owner,
+        name="Gym Leather Belt",
+        sku="BELT-LTHR",
+        category=test_category,
+        unit_of_measurement=Product.Unit.PCS,
+        cost_price=Decimal("400.00"),
+        selling_price=Decimal("800.00"),
+    )
+    adjust_stock(owner, b1, prod, Decimal("5.00"), StockMovement.MovementType.OPENING_STOCK, "INIT")
+
+    # Sale of 2 belts = 1,600 ETB
+    sale = process_pos_checkout(
+        actor=cashier,
+        branch=b1,
+        items_data=[{"product": prod, "quantity": 2}],
+        payments_data=[{"payment_method": pm_cash, "amount": Decimal("1600.00")}],
+    )
+    sale_item = sale.items.first()
+
+    # Two concurrent refund attempts of 2 units each (only 2 were sold total!)
+    results = []
+    errors = []
+
+    def attempt_refund(worker_id):
+        from django.db import connection
+        try:
+            r = process_sale_return(
+                actor=cashier,
+                authorizer=mgr,
+                sale=sale,
+                return_items_data=[{"sale_item_id": sale_item.id, "quantity": 2}],
+                refund_method=pm_cash,
+                reason=f"Concurrent refund worker {worker_id}",
+            )
+            results.append(r)
+        except Exception as e:
+            errors.append(e)
+        finally:
+            connection.close()
+
+    t1 = threading.Thread(target=attempt_refund, args=(1,))
+    t2 = threading.Thread(target=attempt_refund, args=(2,))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Exactly one refund succeeds; the other is rejected because remaining returnable quantity became 0
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert "Only 0.00 returnable" in str(errors[0]) or "cannot exceed" in str(errors[0])

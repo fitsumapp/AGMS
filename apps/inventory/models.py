@@ -290,6 +290,7 @@ class StockMovement(UUIDTimeStampedModel):
         TRANSFER_IN = "TRANSFER_IN", "Inter-branch Transfer In"
         COUNT_ADJUSTMENT = "COUNT_ADJUSTMENT", "Stock Count Reconciliation"
         MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT", "Manual Stock Adjustment"
+        PURCHASE_RETURN = "PURCHASE_RETURN", "Purchase Return to Supplier"
 
     stock_item = models.ForeignKey(
         StockItem,
@@ -480,6 +481,7 @@ class GoodsReceivedNote(UUIDTimeStampedModel):
         related_name="linked_grns",
         help_text="Integrated Phase 10 expense liability for this inventory shipment.",
     )
+    idempotency_key = models.CharField(max_length=120, blank=True, default="", db_index=True)
 
     class Meta:
         verbose_name = "Goods Received Note"
@@ -955,6 +957,7 @@ class Sale(UUIDTimeStampedModel):
         validators=[validate_non_negative_amount],
     )
     notes = models.TextField(blank=True)
+    idempotency_key = models.CharField(max_length=120, blank=True, default="", db_index=True)
     completed_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     class Meta:
@@ -1075,6 +1078,8 @@ class SalePayment(UUIDTimeStampedModel):
         on_delete=models.SET_NULL,
         related_name="verified_pos_payments",
     )
+    verification_notes = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
 
     class Meta:
         verbose_name = "Sale Payment"
