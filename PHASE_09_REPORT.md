@@ -241,6 +241,7 @@ PostgreSQL transactional concurrency was verified with multi-threaded tests usin
 
 ### 19. Git Commit Hash
 
+- Commit hash: `0964bc3`
 - Commit message: `feat: implement gym classes scheduling and member booking`
 - All files staged and committed cleanly.
 
