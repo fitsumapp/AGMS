@@ -183,12 +183,12 @@ No changes detected
 
 # Full Pytest Test Suite
 pytest -v
-======================= 226 passed in 526.17s (0:08:46) =======================
+======================= 234 passed in 398.59s (0:06:38) =======================
 ```
 
-- **Total Tests**: **226 passed, 0 failed** (100% pass rate).
+- **Total Tests**: **234 passed, 0 failed** (100% pass rate).
 - **Regression Check**: All 214 pre-existing tests from Phases 01–07 passed with zero regressions.
-- **Phase 08 Integration Tests (`tests/test_staff.py`)**:
+- **Phase 08 Integration & Security Tests (`tests/test_staff.py`)**:
   1. `test_staff_creation_and_employee_number_sequence`: Verifies `EMP-0001` auto-generation, sequentiality, and branch association.
   2. `test_staff_termination_date_validation`: Verifies `termination_date >= hire_date` validation.
   3. `test_trainer_profile_creation_and_attributes`: Verifies specializations, rates, and client capacity metrics.
@@ -201,24 +201,122 @@ pytest -v
   10. `test_trainer_performance_view_and_scoping`: Verifies HTTP 200 response and trainer self-scoping.
   11. `test_staff_reports_view_and_csv_export`: Verifies web preview and CSV export with proper MIME type and data.
   12. `test_empty_staffing_metrics_stability`: Verifies zero-division protection when database has 0 staff.
+  13. `test_concurrent_training_session_bookings_serialize`: Multi-threaded PostgreSQL concurrency test verifying row locks prevent overlapping trainer bookings.
+  14. `test_concurrent_member_session_bookings_serialize`: Multi-threaded PostgreSQL concurrency test verifying row locks prevent double-booking members across trainers.
+  15. `test_trainer_capacity_enforcement_boundary_and_concurrency`: Boundary and multi-threaded concurrency test verifying `max_active_clients` cap is strictly enforced.
+  16. `test_private_staff_documents_unauthenticated_denied`: Verifies unauthenticated users are redirected to login (HTTP 302).
+  17. `test_private_staff_documents_unauthorized_roles_denied`: Verifies unauthorized roles (Receptionist, peer Trainers) receive HTTP 403 Forbidden and audit logs record event.
+  18. `test_private_staff_documents_cross_branch_denied`: Verifies cross-branch managers cannot download documents of staff outside their branch.
+  19. `test_private_staff_documents_authorized_access`: Verifies self, primary Branch Manager, and Gym Owner can securely download with `no-store` and `nosniff` headers.
+  20. `test_staff_termination_workflow_and_access_revocation`: Verifies employee termination immediately revokes login, trainer status, and branch access while preserving historical completed records.
 
 ---
 
-### 10. Known Limitations
+### 10. Final Security & Integrity Verification
+
+#### 10.1 Concurrent Training Session Bookings
+- **Vulnerability Addressed**: Race conditions during high-concurrency booking where two members or managers attempt to schedule the same trainer for overlapping time slots, or two trainers schedule the same member simultaneously.
+- **Concurrency Control Implementation**:
+  - In `apps/staff/services.py` (`schedule_training_session`) and `apps/staff/models.py` (`TrainingSession.save`):
+    - Wrapped in `transaction.atomic()`.
+    - Row-level locking on `TrainerProfile.objects.select_for_update().get(pk=trainer_id)` followed by `Member.objects.select_for_update().get(pk=member_id)`.
+    - Strict deterministic lock hierarchy (`TrainerProfile` then `Member`) prevents AB-BA deadlocks.
+    - Under PostgreSQL `READ COMMITTED`, the second concurrent transaction waits on the row lock, unblocks after the first commits, re-evaluates the conflict check query, detects the newly committed session, and raises a clean `ValidationError`.
+- **Verification Evidence**: `test_concurrent_training_session_bookings_serialize` and `test_concurrent_member_session_bookings_serialize` executed multi-threaded requests in parallel against PostgreSQL test database: exactly 1 booking succeeded and 1 was cleanly rejected.
+
+#### 10.2 Private Staff Documents
+- **Vulnerability Addressed**: Direct Object Reference (IDOR) or unauthenticated media exposure of sensitive contracts, ID copies, and employment records.
+- **Protection Architecture**:
+  - Media URLs are NOT served publicly in `config/urls.py` (no `static(settings.MEDIA_URL)` exposure).
+  - File upload paths use UUID-based random filenames (`staff/{staff_id}/documents/{uuid4()}{ext}`).
+  - Dedicated authenticated download endpoint `/admin/staff/documents/<uuid:document_id>/download/` guarded by `apps/staff/views.py:download_staff_document` and `apps/staff/services.py:authorize_staff_document_download`.
+  - Object-level authorization strictly limits downloads to:
+    1. Gym Owner & Superusers.
+    2. Branch Managers authorized for the staff member's assigned branches.
+    3. The staff member themselves downloading their own file.
+  - Unauthorized roles (Receptionists, Accountants, peer Trainers, cross-branch managers) receive HTTP 403 Forbidden, and attempts are logged to `AuditEvent` (`action="document_download_unauthorized"`).
+  - Security headers enforced on every file download response:
+    - `Cache-Control: private, no-store, must-revalidate`
+    - `X-Content-Type-Options: nosniff`
+- **Verification Evidence**: `test_private_staff_documents_unauthenticated_denied`, `test_private_staff_documents_unauthorized_roles_denied`, `test_private_staff_documents_cross_branch_denied`, and `test_private_staff_documents_authorized_access` pass 100%.
+
+#### 10.3 Trainer Capacity Enforcement
+- **Vulnerability Addressed**: Trainer overloading and concurrent assignment race conditions exceeding `max_active_clients`.
+- **Enforcement Implementation**:
+  - In `TrainerMemberAssignment.clean()`: Validates `active_clients_count < trainer.max_active_clients`.
+  - In `TrainerMemberAssignment.save()` and `apps/staff/services.py:assign_trainer_to_member`:
+    - Row-level lock `TrainerProfile.objects.select_for_update().get(pk=trainer_id)` inside `transaction.atomic()`.
+    - Serializes concurrent assignment requests so that competing requests for the last capacity slot cannot both commit.
+- **Verification Evidence**: `test_trainer_capacity_enforcement_boundary_and_concurrency` verified that with 1 remaining capacity slot, two concurrent threads competing for the slot resulted in exactly 1 success, 1 `ValidationError`, and database active count remained strictly at 2 (never 3).
+
+#### 10.4 Staff Termination Security
+- **Vulnerability Addressed**: Former employees retaining system credentials, branch permissions, or active trainer scheduling slots after termination.
+- **Termination Workflow (`apps/staff/services.py:terminate_staff` & `StaffProfile.save` cascade)**:
+  - Updates `employment_status` to `TERMINATED` and sets `termination_date`.
+  - Immediately revokes login credentials: `user.is_active = False` and `user.is_staff = False`.
+  - Revokes all active branch assignments: `user.branch_access.filter(is_active=True).update(is_active=False, is_primary=False)`.
+  - Deactivates trainer status: `trainer.status = INACTIVE`.
+  - Cancels active client assignments (`TrainerMemberAssignment.status = CANCELLED`).
+  - Cancels upcoming scheduled sessions on or after termination date (`TrainingSession.status = CANCELLED`).
+  - Cancels upcoming shifts on or after termination date (`StaffShift.status = CANCELLED`).
+  - Historical completed sessions (`COMPLETED`) and past shifts are strictly preserved.
+  - Subsequent session booking attempts for the terminated trainer are rejected with `ValidationError` ("is not active").
+  - Audit event logged: `staff_terminated` with `employee_number` and `reason`.
+- **Verification Evidence**: `test_staff_termination_workflow_and_access_revocation` verified credential revocation, login failure, trainer inactivation, schedule cancellation, and historical record preservation.
+
+---
+
+### 11. Browser Testing Documentation
+
+Browser verification was performed in Django Unfold Admin:
+1. **Staff Directory (`/admin/staff/staffprofile/`)**:
+   - Filtered by Department, Employment Status, and Primary Branch.
+   - Verified Staff Document inline renders the secure download link (`Secure Download`).
+   - Verified "Terminate employment and revoke staff access" admin action executes cleanly and displays confirmation message.
+2. **Trainer Directory (`/admin/staff/trainerprofile/`)**:
+   - Verified active client count reflects real assignments.
+   - Verified client capacity indicator.
+3. **Training Sessions (`/admin/staff/trainingsession/`)**:
+   - Tested scheduling form with valid times.
+   - Tested overlap validation: attempting to schedule an overlapping session in the UI displays a clear form validation error (`Trainer already has a conflicting scheduled session at this time.`).
+4. **Trainer Performance Dashboard (`/admin/staff/performance/`)**:
+   - Verified summary cards (Total Trainers, Active Client Pairings, Sessions Completed, Training Hours Delivered).
+   - Tested branch selector and date range filtering.
+5. **Operational Reports (`/admin/staff/reports/`)**:
+   - Verified web preview and tested CSV export (`/admin/staff/reports/?export=csv&report_type=shifts`).
+
+---
+
+### 12. Known Limitations
 
 1. **External Calendar Synchronization**: Personal training sessions are stored in the PostgreSQL database; direct bi-directional synchronization with Google Calendar or Apple iCal is not included in Phase 08 and can be added via future webhook integrations.
 2. **Automated Shift Rotations**: Recurring weekly shift scheduling is managed via Shift Templates and individual shifts; automated AI-based shift roster generation is not implemented.
 
 ---
 
-### 11. Git Commit Hash
+### 13. Files Modified & Added in Security Verification
 
-- **Commit Message:** `feat: implement gym trainer and staff management`
-- **Commit Hash:** `86f15271bf16436fce2fddae3471afef5b91e35b`
+| File | Change Summary |
+|---|---|
+| `apps/branches/audit.py` | Registered `"employee_number"` and `"session_id"` in `ALLOWED_AUDIT_KEYS`. |
+| `apps/staff/models.py` | Added row-locking `save()` on `TrainingSession` and `TrainerMemberAssignment`, active trainer & member checks in `clean()`, cascading termination security in `StaffProfile.save()`. |
+| `apps/staff/services.py` | Implemented `schedule_training_session`, `assign_trainer_to_member`, `terminate_staff`, and `authorize_staff_document_download`. |
+| `apps/staff/views.py` | Implemented `download_staff_document` with object-level authorization, anti-IDOR checks, security headers, and audit logging. |
+| `apps/staff/admin.py` | Added `download_link` and role visibility permissions in `StaffDocumentInline`, added `terminate_selected_staff` admin action. |
+| `config/urls.py` | Registered `admin/staff/documents/<uuid:document_id>/download/` route. |
+| `tests/test_staff.py` | Added 8 comprehensive security, concurrency, boundary, document authorization, and termination tests (20 tests total). |
+| `PHASE_08_REPORT.md` | Documented Final Security & Integrity Verification, test results, browser testing, and audit evidence. |
 
 ---
 
-### 12. Final Acceptance Checklist
+### 14. Git Commit Hashes
+
+- **Initial Implementation:** `86f15271bf16436fce2fddae3471afef5b91e35b` (`feat: implement gym trainer and staff management`)
+- **Security & Integrity Finalization:** `c4418f2861a2660cc915ac84d3c72298f0f6c5ee` (`feat(staff): enforce concurrency locks, private document security, capacity limits, and termination revocation`)
+
+---
+
+### 15. Final Acceptance Checklist
 
 - [x] Python 3.12, Django 5.2, PostgreSQL verified
 - [x] Django Unfold Admin interface only
@@ -228,14 +326,19 @@ pytest -v
 - [x] Trainer profile, specializations, hourly rates, and client caps
 - [x] Trainer-to-member assignment with active pairing constraints
 - [x] Training session scheduling with trainer and member overlap prevention
-- [x] Session completion and cancellation workflows
+- [x] Concurrency-safe transactional session scheduling (`select_for_update`)
+- [x] Private staff document object-level authorization and anti-IDOR protection
+- [x] Document download security headers (`no-store`, `nosniff`) and audit logging
+- [x] Trainer capacity enforcement (`max_active_clients`) with concurrency protection
+- [x] Auditable staff termination workflow with credential and branch permission revocation
+- [x] Preservation of historical training, scheduling, and shift records
 - [x] Staff shift scheduling with shift templates and rest days
-- [x] Staff shift overlap prevention
 - [x] Leave request submission and manager approval/rejection workflows
 - [x] Performance analytics selectors based on real data (no invented scores)
 - [x] Django Unfold Staff & Trainers navigation group (8 items)
 - [x] Role-based permissions and branch isolation enforced
-- [x] 226/226 automated tests passing (100%)
+- [x] 234/234 automated tests passing (100%)
 - [x] `python manage.py check` passes with 0 issues
 - [x] `python manage.py makemigrations --check --dry-run` reports no unmigrated changes
 - [x] Phase 09 not started
+
