@@ -32,6 +32,9 @@ def test_all_admins_use_unfold():
         "inventory.StockMovement", "inventory.PurchaseOrder", "inventory.GoodsReceivedNote",
         "inventory.StockTransfer", "inventory.StockAdjustment", "inventory.StockCount",
         "inventory.CashierShift", "inventory.Sale", "inventory.PosSettlementBatch",
+        "notifications.ProviderConfig", "notifications.MessageTemplate", "notifications.NotificationPreference",
+        "notifications.AutomationRule", "notifications.BulkCampaign", "notifications.NotificationMessage",
+        "notifications.DeliveryQueueItem", "notifications.ScheduledNotification", "notifications.InAppNotification",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

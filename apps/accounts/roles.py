@@ -95,6 +95,17 @@ ROLE_PERMISSIONS = {
             "add_possettledpayment", "change_possettledpayment", "delete_possettledpayment", "view_possettledpayment",
             "add_possettledreturn", "change_possettledreturn", "delete_possettledreturn", "view_possettledreturn",
         },
+        "notifications": {
+            "add_providerconfig", "change_providerconfig", "delete_providerconfig", "view_providerconfig",
+            "add_messagetemplate", "change_messagetemplate", "delete_messagetemplate", "view_messagetemplate",
+            "add_notificationpreference", "change_notificationpreference", "delete_notificationpreference", "view_notificationpreference",
+            "add_automationrule", "change_automationrule", "delete_automationrule", "view_automationrule",
+            "add_bulkcampaign", "change_bulkcampaign", "delete_bulkcampaign", "view_bulkcampaign",
+            "add_notificationmessage", "change_notificationmessage", "delete_notificationmessage", "view_notificationmessage",
+            "add_deliveryqueueitem", "change_deliveryqueueitem", "delete_deliveryqueueitem", "view_deliveryqueueitem",
+            "add_schedulednotification", "change_schedulednotification", "delete_schedulednotification", "view_schedulednotification",
+            "add_inappnotification", "change_inappnotification", "delete_inappnotification", "view_inappnotification",
+        },
     },
     "Branch Manager": {
         "branches": {"view_branch", "change_branch", "view_branchsettings", "change_branchsettings"},
@@ -164,6 +175,16 @@ ROLE_PERMISSIONS = {
             "add_salereturn", "change_salereturn", "view_salereturn", "add_salereturnitem", "view_salereturnitem",
             "add_possettlementbatch", "view_possettlementbatch",
         },
+        "notifications": {
+            "add_messagetemplate", "change_messagetemplate", "view_messagetemplate",
+            "add_notificationpreference", "change_notificationpreference", "view_notificationpreference",
+            "add_automationrule", "change_automationrule", "view_automationrule",
+            "add_bulkcampaign", "change_bulkcampaign", "view_bulkcampaign",
+            "add_notificationmessage", "view_notificationmessage",
+            "view_deliveryqueueitem",
+            "view_schedulednotification",
+            "view_inappnotification", "change_inappnotification",
+        },
     },
     "Receptionist": {
         "branches": {"view_branch"},
@@ -212,6 +233,12 @@ ROLE_PERMISSIONS = {
             "add_cashiershift", "change_cashiershift", "view_cashiershift",
             "add_sale", "view_sale", "add_saleitem", "view_saleitem",
             "add_salepayment", "view_salepayment", "view_salereceipt",
+        },
+        "notifications": {
+            "view_messagetemplate",
+            "add_notificationmessage", "view_notificationmessage",
+            "view_notificationpreference", "change_notificationpreference",
+            "view_inappnotification", "change_inappnotification",
         },
     },
     "Accountant": {
@@ -264,6 +291,11 @@ ROLE_PERMISSIONS = {
             "add_salereturn", "change_salereturn", "view_salereturn", "add_salereturnitem", "view_salereturnitem",
             "add_possettlementbatch", "change_possettlementbatch", "view_possettlementbatch",
         },
+        "notifications": {
+            "view_messagetemplate",
+            "add_notificationmessage", "view_notificationmessage",
+            "view_inappnotification", "change_inappnotification",
+        },
     },
     "Trainer": {
         "branches": {"view_branch"},
@@ -275,6 +307,9 @@ ROLE_PERMISSIONS = {
             "view_staffshift",
             "add_leaverequest", "view_leaverequest",
         },
+        "notifications": {
+            "view_inappnotification", "change_inappnotification",
+        },
     },
     "POS Staff": {
         "branches": {"view_branch"},
@@ -283,6 +318,9 @@ ROLE_PERMISSIONS = {
             "add_cashiershift", "change_cashiershift", "view_cashiershift",
             "add_sale", "change_sale", "view_sale", "add_saleitem", "view_saleitem",
             "add_salepayment", "view_salepayment", "view_salereceipt", "view_salereturn",
+        },
+        "notifications": {
+            "view_inappnotification", "change_inappnotification",
         },
     },
 }

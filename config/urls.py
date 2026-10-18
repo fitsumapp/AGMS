@@ -28,6 +28,14 @@ from apps.inventory.views import (
     pos_receipt_view,
     pos_reports_view,
 )
+from apps.notifications.views import (
+    notification_dashboard_view,
+    send_sms_view,
+    bulk_campaign_view,
+    communication_reports_view,
+    get_unread_in_app_notifications_api,
+    mark_in_app_notification_read,
+)
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="admin:index", permanent=False)),
@@ -52,5 +60,11 @@ urlpatterns = [
     path("admin/pos/api/lookup/", admin.site.admin_view(pos_product_lookup_view), name="pos-product-lookup"),
     path("admin/pos/receipt/<uuid:sale_id>/", admin.site.admin_view(pos_receipt_view), name="pos-receipt"),
     path("admin/pos/reports/", admin.site.admin_view(pos_reports_view), name="pos-reports"),
+    path("admin/notifications/dashboard/", admin.site.admin_view(notification_dashboard_view), name="notification-dashboard"),
+    path("admin/notifications/sendsms/", admin.site.admin_view(send_sms_view), name="send-sms"),
+    path("admin/notifications/bulkcampaign/", admin.site.admin_view(bulk_campaign_view), name="bulk-campaign"),
+    path("admin/notifications/reports/", admin.site.admin_view(communication_reports_view), name="notification-reports"),
+    path("admin/notifications/api/inapp/unread/", admin.site.admin_view(get_unread_in_app_notifications_api), name="inapp-unread-api"),
+    path("admin/notifications/api/inapp/<int:notification_id>/read/", admin.site.admin_view(mark_in_app_notification_read), name="inapp-mark-read"),
     path("admin/", admin.site.urls),
 ]

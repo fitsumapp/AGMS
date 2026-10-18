@@ -243,6 +243,36 @@ def can_see_inventory(request):
     from apps.inventory.permissions import can_manage_inventory, can_view_inventory_reports, can_operate_pos
     return can_manage_inventory(request.user) or can_view_inventory_reports(request.user) or can_operate_pos(request.user)
 
+def can_see_notifications(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.notifications.permissions import can_view_notification_dashboard
+    return can_view_notification_dashboard(request.user)
+
+def can_see_send_sms(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.notifications.permissions import can_send_sms
+    return can_send_sms(request.user)
+
+def can_see_bulk_messaging(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.notifications.permissions import can_send_bulk_messages
+    return can_send_bulk_messages(request.user)
+
+def can_see_notification_templates(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.notifications.permissions import can_manage_templates
+    return can_manage_templates(request.user)
+
+def can_see_provider_settings(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.notifications.permissions import can_manage_provider_config
+    return can_manage_provider_config(request.user)
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -365,6 +395,20 @@ def unfold_config():
                 {"title": "Stock Adjustments", "icon": "tune", "link": reverse_lazy("admin:inventory_stockadjustment_changelist"), "permission": can_see_inventory},
                 {"title": "Stock Counts", "icon": "fact_check", "link": reverse_lazy("admin:inventory_stockcount_changelist"), "permission": can_see_inventory},
                 {"title": "Sales & Inventory Reports", "icon": "summarize", "link": reverse_lazy("pos-reports"), "permission": can_see_inventory},
+            ]},
+            {"title": "Notifications & Communication", "items": [
+                {"title": "Notification Dashboard", "icon": "space_dashboard", "link": reverse_lazy("notification-dashboard"), "permission": can_see_notifications},
+                {"title": "Send SMS", "icon": "sms", "link": reverse_lazy("send-sms"), "permission": can_see_send_sms},
+                {"title": "Bulk Messaging", "icon": "campaign", "link": reverse_lazy("bulk-campaign"), "permission": can_see_bulk_messaging},
+                {"title": "Message Templates", "icon": "text_fields", "link": reverse_lazy("admin:notifications_messagetemplate_changelist"), "permission": can_see_notification_templates},
+                {"title": "Notification History", "icon": "history", "link": reverse_lazy("admin:notifications_notificationmessage_changelist"), "permission": can_see_notifications},
+                {"title": "Scheduled Notifications", "icon": "schedule", "link": reverse_lazy("admin:notifications_schedulednotification_changelist"), "permission": can_see_notifications},
+                {"title": "Delivery Queue", "icon": "queue", "link": reverse_lazy("admin:notifications_deliveryqueueitem_changelist"), "permission": can_see_notifications},
+                {"title": "Failed Messages", "icon": "error", "link": format_lazy("{}?status__exact=FAILED", reverse_lazy("admin:notifications_notificationmessage_changelist")), "permission": can_see_notifications},
+                {"title": "Automation Rules", "icon": "auto_mode", "link": reverse_lazy("admin:notifications_automationrule_changelist"), "permission": can_see_notification_templates},
+                {"title": "Notification Preferences", "icon": "tune", "link": reverse_lazy("admin:notifications_notificationpreference_changelist"), "permission": can_see_notifications},
+                {"title": "Provider Settings", "icon": "settings_cell", "link": reverse_lazy("admin:notifications_providerconfig_changelist"), "permission": can_see_provider_settings},
+                {"title": "Communication Reports", "icon": "summarize", "link": reverse_lazy("notification-reports"), "permission": can_see_notifications},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},

@@ -1,0 +1,176 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">notifications_active</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          Notification & Communications Dashboard
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        Multi-channel SMS, in-app messaging, automated reminders, and delivery queue health.
+      </p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex items-center gap-2">
+      {% if can_send %}
+      <a
+        href="{% url 'send-sms' %}"
+        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5"
+      >
+        <span class="material-symbols-outlined text-sm">sms</span>
+        Send SMS
+      </a>
+      {% endif %}
+      {% if can_bulk %}
+      <a
+        href="{% url 'bulk-campaign' %}"
+        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5"
+      >
+        <span class="material-symbols-outlined text-sm">campaign</span>
+        Bulk Messaging
+      </a>
+      {% endif %}
+      <a
+        href="{% url 'notification-reports' %}"
+        class="px-4 py-2 bg-base-100 hover:bg-base-200 dark:bg-base-800 dark:hover:bg-base-700 text-font-important-light dark:text-font-important-dark font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 border border-base-200 dark:border-base-700"
+      >
+        <span class="material-symbols-outlined text-sm">summarize</span>
+        Reports
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Overview Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Total Dispatched</span>
+      <p class="text-lg font-extrabold text-font-important-light dark:text-font-important-dark mt-1 font-mono">
+        {{ metrics.total_count }}
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">{{ metrics.total_segments }} total segments</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Sent / Delivered</span>
+      <p class="text-lg font-extrabold text-emerald-600 mt-1 font-mono">
+        {{ metrics.sent_count }} / {{ metrics.delivered_count }}
+      </p>
+      <p class="text-[10px] text-emerald-600 font-bold mt-0.5">{{ metrics.delivery_rate }}% success rate</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Failed Messages</span>
+      <p class="text-lg font-extrabold text-red-600 mt-1 font-mono">
+        {{ metrics.failed_count }}
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">{{ metrics.queue_dead_letter }} in dead-letter</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Queue Depth</span>
+      <p class="text-lg font-extrabold text-amber-600 mt-1 font-mono">
+        {{ metrics.queue_pending }}
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">Pending delivery</p>
+    </div>
+
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <span class="text-[10px] font-bold text-subtle uppercase">Estimated SMS Cost</span>
+      <p class="text-lg font-extrabold text-primary-600 mt-1 font-mono">
+        {{ metrics.total_cost_etb|floatformat:2 }} ETB
+      </p>
+      <p class="text-[10px] text-subtle mt-0.5">Tariff consumption</p>
+    </div>
+  </div>
+
+  <!-- In-App Alerts Banner if any -->
+  {% if unread_in_app_list %}
+  <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="material-symbols-outlined text-amber-600 text-sm">notifications</span>
+      <h2 class="text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-wider">
+        Unread Operational Alerts ({{ metrics.unread_in_app }})
+      </h2>
+    </div>
+    <div class="space-y-1.5">
+      {% for alert in unread_in_app_list %}
+      <div class="text-xs flex items-center justify-between text-font-important-light dark:text-font-important-dark bg-white/70 dark:bg-base-900/70 p-2 rounded-lg border border-amber-100 dark:border-amber-900">
+        <div>
+          <span class="font-bold text-amber-900 dark:text-amber-300">{{ alert.title }}:</span>
+          <span>{{ alert.message }}</span>
+        </div>
+        <span class="text-[10px] text-subtle">{{ alert.created_at|date:"M d, H:i" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Recent Notifications Table -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl overflow-hidden shadow-xs">
+    <div class="px-4 py-3 border-b border-base-200 dark:border-base-800 flex items-center justify-between">
+      <h2 class="text-xs font-bold text-font-important-light dark:text-font-important-dark uppercase tracking-wider">
+        Recent Dispatches
+      </h2>
+      <a href="{% url 'admin:notifications_notificationmessage_changelist' %}" class="text-xs text-primary-600 hover:underline">
+        View All History &rarr;
+      </a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-base-50 dark:bg-base-800/50 text-subtle uppercase border-b border-base-200 dark:border-base-800">
+          <tr>
+            <th class="px-4 py-2.5">Time</th>
+            <th class="px-4 py-2.5">Channel</th>
+            <th class="px-4 py-2.5">Category</th>
+            <th class="px-4 py-2.5">Recipient</th>
+            <th class="px-4 py-2.5">Status</th>
+            <th class="px-4 py-2.5">Cost</th>
+            <th class="px-4 py-2.5">Branch</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-base-100 dark:divide-base-800">
+          {% for msg in recent_messages %}
+          <tr class="hover:bg-base-50/50 dark:hover:bg-base-800/30 transition">
+            <td class="px-4 py-2.5 whitespace-nowrap text-subtle font-mono">{{ msg.created_at|date:"M d, H:i" }}</td>
+            <td class="px-4 py-2.5 whitespace-nowrap font-bold">{{ msg.get_channel_display }}</td>
+            <td class="px-4 py-2.5 whitespace-nowrap">{{ msg.get_category_display }}</td>
+            <td class="px-4 py-2.5 whitespace-nowrap font-mono">{{ msg.recipient_address }}</td>
+            <td class="px-4 py-2.5 whitespace-nowrap">
+              {% if msg.status == 'DELIVERED' or msg.status == 'SENT' %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                {{ msg.get_status_display }}
+              </span>
+              {% elif msg.status == 'FAILED' %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
+                Failed
+              </span>
+              {% else %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-base-100 text-base-800 dark:bg-base-800 dark:text-base-300">
+                {{ msg.get_status_display }}
+              </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 whitespace-nowrap font-mono">{{ msg.estimated_cost_etb|floatformat:2 }} ETB</td>
+            <td class="px-4 py-2.5 whitespace-nowrap text-subtle">{{ msg.branch.name|default:"Global" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-subtle">No notifications logged yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
