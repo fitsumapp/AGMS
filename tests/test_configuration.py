@@ -35,6 +35,11 @@ def test_all_admins_use_unfold():
         "notifications.ProviderConfig", "notifications.MessageTemplate", "notifications.NotificationPreference",
         "notifications.AutomationRule", "notifications.BulkCampaign", "notifications.NotificationMessage",
         "notifications.DeliveryQueueItem", "notifications.ScheduledNotification", "notifications.InAppNotification",
+        "facilities.LockerZone", "facilities.Locker", "facilities.LockerAssignment",
+        "facilities.LockerIncident", "facilities.EquipmentCategory", "facilities.FacilityArea",
+        "facilities.Equipment", "facilities.MaintenanceSchedule", "facilities.FaultReport",
+        "facilities.MaintenanceWorkOrder", "facilities.CleaningTaskSchedule",
+        "facilities.CleaningTaskExecution", "facilities.FacilityInspection", "facilities.IncidentReport",
     }
     assert all(isinstance(value, ModelAdmin) for value in admin.site._registry.values())
 

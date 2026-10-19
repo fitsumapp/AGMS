@@ -696,7 +696,7 @@ def conduct_reconciliation(
                 completed_at__date__lte=p_end,
             ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
             outflows += billing_refunds
-        elif account.account_type == FinancialAccount.AccountType.BANK and account.branch:
+        elif account.account_type == FinancialAccount.AccountType.BANK_ACCOUNT and account.branch:
             from apps.billing.models import Payment, Refund
             billing_bank = Payment.objects.filter(
                 branch=account.branch,
@@ -715,7 +715,7 @@ def conduct_reconciliation(
                 completed_at__date__lte=p_end,
             ).aggregate(tot=models.Sum("amount"))["tot"] or Decimal("0.00")
             outflows += billing_bank_refunds
-        elif account.account_type == FinancialAccount.AccountType.WALLET and account.branch:
+        elif account.account_type == FinancialAccount.AccountType.DIGITAL_WALLET and account.branch:
             from apps.billing.models import Payment, Refund
             billing_wallet = Payment.objects.filter(
                 branch=account.branch,

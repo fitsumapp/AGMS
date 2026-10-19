@@ -37,6 +37,10 @@ from apps.notifications.views import (
     mark_in_app_notification_read,
     sms_delivery_callback_view,
 )
+from apps.facilities.views import (
+    facility_dashboard_view,
+    facility_reports_view,
+)
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="admin:index", permanent=False)),
@@ -68,5 +72,7 @@ urlpatterns = [
     path("admin/notifications/api/inapp/unread/", admin.site.admin_view(get_unread_in_app_notifications_api), name="inapp-unread-api"),
     path("admin/notifications/api/inapp/<int:notification_id>/read/", admin.site.admin_view(mark_in_app_notification_read), name="inapp-mark-read"),
     path("admin/notifications/callbacks/<str:provider_code>/", sms_delivery_callback_view, name="sms-delivery-callback"),
+    path("admin/facilities/dashboard/", admin.site.admin_view(facility_dashboard_view), name="facility-dashboard"),
+    path("admin/facilities/reports/", admin.site.admin_view(facility_reports_view), name="facility-reports"),
     path("admin/", admin.site.urls),
 ]

@@ -1,0 +1,145 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">summarize</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          Facility & Equipment Reports
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        Operational exports, asset valuation, locker utilization, and maintenance cost analytics.
+      </p>
+    </div>
+
+    <!-- Branch Selector -->
+    <div class="flex items-center gap-2">
+      <form method="get" class="flex items-center gap-2">
+        <select name="branch" onchange="this.form.submit()" class="text-xs bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg px-2.5 py-1.5 font-medium">
+          <option value="all" {% if not selected_branch %}selected{% endif %}>All Accessible Branches</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}" {% if selected_branch and selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <!-- Export Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Locker Inventory Export -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-5 rounded-xl shadow-xs flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-600">lock</span>
+          <h3 class="font-bold text-sm text-font-important-light dark:text-font-important-dark">Locker Inventory & Status</h3>
+        </div>
+        <p class="text-xs text-subtle mt-2">
+          Detailed inventory of all lockers, zones, fees, deposit liabilities, and current allocation status.
+        </p>
+      </div>
+      <div class="mt-4 pt-4 border-t border-base-100 dark:border-base-800 flex items-center justify-between">
+        <span class="text-xs font-mono font-bold">{{ metrics.total_lockers }} lockers</span>
+        <a
+          href="?export=lockers{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs shadow-xs transition flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-xs">download</span>
+          Export CSV
+        </a>
+      </div>
+    </div>
+
+    <!-- Equipment Registry Export -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-5 rounded-xl shadow-xs flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-600">fitness_center</span>
+          <h3 class="font-bold text-sm text-font-important-light dark:text-font-important-dark">Equipment Asset Registry</h3>
+        </div>
+        <p class="text-xs text-subtle mt-2">
+          Full asset register including acquisition costs, warranties, downtime logs, and maintenance conditions.
+        </p>
+      </div>
+      <div class="mt-4 pt-4 border-t border-base-100 dark:border-base-800 flex items-center justify-between">
+        <span class="text-xs font-mono font-bold">{{ metrics.total_equipment }} assets</span>
+        <a
+          href="?export=equipment{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs shadow-xs transition flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-xs">download</span>
+          Export CSV
+        </a>
+      </div>
+    </div>
+
+    <!-- Maintenance Orders Export -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-5 rounded-xl shadow-xs flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-600">build</span>
+          <h3 class="font-bold text-sm text-font-important-light dark:text-font-important-dark">Maintenance Work Orders</h3>
+        </div>
+        <p class="text-xs text-subtle mt-2">
+          Complete audit trail of preventive and corrective maintenance orders, labor, parts, and total expenses.
+        </p>
+      </div>
+      <div class="mt-4 pt-4 border-t border-base-100 dark:border-base-800 flex items-center justify-between">
+        <span class="text-xs font-mono font-bold text-primary-600">{{ metrics.total_maintenance_cost_etb }} ETB</span>
+        <a
+          href="?export=maintenance{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs shadow-xs transition flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-xs">download</span>
+          Export CSV
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Table -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs overflow-hidden">
+    <div class="p-4 border-b border-base-200 dark:border-base-800 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">Locker Utilization Summary</h2>
+      <a href="{% url 'facility-dashboard' %}" class="text-xs text-primary-600 hover:underline font-semibold">&larr; Back to Dashboard</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-base-50 dark:bg-base-800 text-subtle uppercase font-bold text-[10px]">
+          <tr>
+            <th class="px-4 py-2.5">Branch</th>
+            <th class="px-4 py-2.5">Zone Name</th>
+            <th class="px-4 py-2.5">Total Lockers</th>
+            <th class="px-4 py-2.5">Occupied</th>
+            <th class="px-4 py-2.5">Available</th>
+            <th class="px-4 py-2.5">Utilization</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-base-100 dark:divide-base-800 text-font-important-light dark:text-font-important-dark">
+          {% for item in zone_utilization %}
+          <tr class="hover:bg-base-50/50 dark:hover:bg-base-800/50">
+            <td class="px-4 py-2.5 font-medium">{{ item.branch_name }}</td>
+            <td class="px-4 py-2.5 font-bold">{{ item.zone_name }}</td>
+            <td class="px-4 py-2.5 font-mono">{{ item.total }}</td>
+            <td class="px-4 py-2.5 font-mono text-blue-600 dark:text-blue-400">{{ item.occupied }}</td>
+            <td class="px-4 py-2.5 font-mono text-emerald-600 dark:text-emerald-400">{{ item.available }}</td>
+            <td class="px-4 py-2.5 font-mono font-bold">{{ item.utilization_rate }}%</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-subtle">No locker zones configured.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

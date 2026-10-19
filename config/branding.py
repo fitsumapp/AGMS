@@ -273,6 +273,44 @@ def can_see_provider_settings(request):
     from apps.notifications.permissions import can_manage_provider_config
     return can_manage_provider_config(request.user)
 
+def can_see_facilities(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.facilities.permissions import can_view_facility
+    return can_view_facility(request.user)
+
+def can_see_lockers(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Receptionist")
+
+def can_see_equipment(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Trainer")
+
+def can_see_maintenance(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager") or has_role(request.user, "Trainer")
+
+def can_see_cleaning(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    if owner(request):
+        return True
+    from apps.accounts.roles import has_role
+    return has_role(request.user, "Branch Manager")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -409,6 +447,22 @@ def unfold_config():
                 {"title": "Notification Preferences", "icon": "tune", "link": reverse_lazy("admin:notifications_notificationpreference_changelist"), "permission": can_see_notifications},
                 {"title": "Provider Settings", "icon": "settings_cell", "link": reverse_lazy("admin:notifications_providerconfig_changelist"), "permission": can_see_provider_settings},
                 {"title": "Communication Reports", "icon": "summarize", "link": reverse_lazy("notification-reports"), "permission": can_see_notifications},
+            ]},
+            {"title": "Facility & Equipment", "items": [
+                {"title": "Facility Dashboard", "icon": "space_dashboard", "link": reverse_lazy("facility-dashboard"), "permission": can_see_facilities},
+                {"title": "Lockers", "icon": "lock", "link": reverse_lazy("admin:facilities_locker_changelist"), "permission": can_see_lockers},
+                {"title": "Locker Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:facilities_lockerassignment_changelist"), "permission": can_see_lockers},
+                {"title": "Locker Zones", "icon": "meeting_room", "link": reverse_lazy("admin:facilities_lockerzone_changelist"), "permission": can_see_lockers},
+                {"title": "Equipment Registry", "icon": "fitness_center", "link": reverse_lazy("admin:facilities_equipment_changelist"), "permission": can_see_equipment},
+                {"title": "Equipment Categories", "icon": "category", "link": reverse_lazy("admin:facilities_equipmentcategory_changelist"), "permission": can_see_equipment},
+                {"title": "Maintenance Schedules", "icon": "calendar_month", "link": reverse_lazy("admin:facilities_maintenanceschedule_changelist"), "permission": can_see_maintenance},
+                {"title": "Maintenance Work Orders", "icon": "build", "link": reverse_lazy("admin:facilities_maintenanceworkorder_changelist"), "permission": can_see_maintenance},
+                {"title": "Fault Reports", "icon": "report_problem", "link": reverse_lazy("admin:facilities_faultreport_changelist"), "permission": can_see_facilities},
+                {"title": "Facility Areas", "icon": "domain", "link": reverse_lazy("admin:facilities_facilityarea_changelist"), "permission": can_see_facilities},
+                {"title": "Cleaning Tasks", "icon": "cleaning_services", "link": reverse_lazy("admin:facilities_cleaningtaskexecution_changelist"), "permission": can_see_cleaning},
+                {"title": "Facility Inspections", "icon": "fact_check", "link": reverse_lazy("admin:facilities_facilityinspection_changelist"), "permission": can_see_facilities},
+                {"title": "Incident Reports", "icon": "emergency", "link": reverse_lazy("admin:facilities_incidentreport_changelist"), "permission": can_see_facilities},
+                {"title": "Facility Reports", "icon": "summarize", "link": reverse_lazy("facility-reports"), "permission": can_see_facilities},
             ]},
             {"title": "Management", "items": [
                 {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},
