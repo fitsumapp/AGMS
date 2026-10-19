@@ -73,9 +73,10 @@ class CustomHTTPSMSProvider(BaseSMSProvider):
             )
 
     def check_delivery_status(self, provider_message_id: str) -> SMSResponse:
+        """Custom HTTP gateway status check; default status is ACCEPTED pending webhook callback."""
         return SMSResponse(
             success=True,
             provider_message_id=provider_message_id,
-            status="SENT",
-            raw_response={"id": provider_message_id},
+            status="ACCEPTED",
+            raw_response={"id": provider_message_id, "note": "Pending delivery callback"},
         )

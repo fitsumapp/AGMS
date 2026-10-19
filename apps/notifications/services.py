@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 import logging
+import os
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -194,6 +195,7 @@ def dispatch_single_queue_item(queue_item: DeliveryQueueItem) -> bool:
             provider_id = resp.provider_message_id
             raw_resp = resp.raw_response
             error_msg = resp.error
+            # Explicit delivery state: API acceptance is ACCEPTED / SENT; final handset delivery requires callback
             final_status = NotificationStatus.SENT if success else NotificationStatus.FAILED
 
         elif channel == NotificationChannel.EMAIL:
@@ -245,40 +247,110 @@ def dispatch_single_queue_item(queue_item: DeliveryQueueItem) -> bool:
         ])
 
         queue_item.status = QueueStatus.COMPLETED
-        queue_item.save(update_fields=["status", "updated_at"])
+        queue_item.locked_at = None
+        queue_item.locked_by = ""
+        queue_item.save(update_fields=["status", "locked_at", "locked_by", "updated_at"])
         return True
     else:
         queue_item.retry_count += 1
         if queue_item.retry_count >= queue_item.max_retries:
             queue_item.status = QueueStatus.DEAD_LETTER
+            queue_item.locked_at = None
+            queue_item.locked_by = ""
             notification.status = NotificationStatus.FAILED
             notification.failed_at = now
             notification.error_message = error_msg
             notification.provider_response = raw_resp
             notification.save(update_fields=["status", "failed_at", "error_message", "provider_response", "updated_at"])
         else:
-            # Exponential backoff
-            delay_sec = queue_item.backoff_factor * (2 ** (queue_item.retry_count - 1))
+            # Bounded exponential backoff (capped at 3600 seconds)
+            delay_sec = min(queue_item.backoff_factor * (2 ** (queue_item.retry_count - 1)), 3600)
             queue_item.next_retry_at = now + timedelta(seconds=delay_sec)
             queue_item.status = QueueStatus.PENDING
+            queue_item.locked_at = None
+            queue_item.locked_by = ""
             notification.status = NotificationStatus.QUEUED
             notification.error_message = f"Attempt {queue_item.retry_count} failed: {error_msg}"
             notification.save(update_fields=["status", "error_message", "updated_at"])
 
-        queue_item.save(update_fields=["retry_count", "status", "next_retry_at", "updated_at"])
+        queue_item.save(update_fields=["retry_count", "status", "next_retry_at", "locked_at", "locked_by", "updated_at"])
         return False
 
 
-def process_queue(batch_size: int = 50) -> dict:
+def recover_stale_processing_items(stale_threshold_seconds: int = 300) -> dict:
+    """
+    Recover queue items abandoned in PROCESSING state due to worker crashes.
+    Prevents messages from staying permanently locked.
+    If provider message ID was recorded, reconciles without resending to avoid duplicate SMS.
+    If no provider record exists, either retries or transitions to UNKNOWN for manual audit.
+    """
+    now = timezone.now()
+    threshold = now - timedelta(seconds=stale_threshold_seconds)
+    recovered = 0
+    reconciled = 0
+    dead_lettered = 0
+
+    with transaction.atomic():
+        stale_items = list(
+            DeliveryQueueItem.objects.select_for_update(skip_locked=True)
+            .filter(status=QueueStatus.PROCESSING, locked_at__lt=threshold)
+        )
+        for item in stale_items:
+            notif = item.notification
+            if notif.provider_message_id:
+                # Provider already received it before crash! Complete queue item, do not duplicate
+                item.status = QueueStatus.COMPLETED
+                item.locked_at = None
+                item.locked_by = ""
+                item.save(update_fields=["status", "locked_at", "locked_by", "updated_at"])
+                if notif.status in (NotificationStatus.SENDING, NotificationStatus.QUEUED):
+                    notif.status = NotificationStatus.SENT
+                    notif.save(update_fields=["status", "updated_at"])
+                reconciled += 1
+            else:
+                # No receipt before crash. Increment retry or enter UNKNOWN dead-letter
+                item.retry_count += 1
+                if item.retry_count >= item.max_retries:
+                    item.status = QueueStatus.DEAD_LETTER
+                    item.locked_at = None
+                    item.locked_by = ""
+                    notif.status = NotificationStatus.UNKNOWN
+                    notif.error_message = (
+                        f"Worker crash detected while processing (locked by {item.locked_by} at {item.locked_at}). "
+                        f"Transferred to UNKNOWN to avoid duplicate sending; manual reconciliation required."
+                    )
+                    notif.save(update_fields=["status", "error_message", "updated_at"])
+                    dead_lettered += 1
+                else:
+                    delay_sec = min(item.backoff_factor * (2 ** (item.retry_count - 1)), 3600)
+                    item.status = QueueStatus.PENDING
+                    item.next_retry_at = now + timedelta(seconds=delay_sec)
+                    item.locked_at = None
+                    item.locked_by = ""
+                    notif.status = NotificationStatus.QUEUED
+                    notif.error_message = f"Recovered from stale lock ({item.locked_by}). Rescheduled retry #{item.retry_count}."
+                    notif.save(update_fields=["status", "error_message", "updated_at"])
+                    recovered += 1
+                item.save(update_fields=["status", "retry_count", "next_retry_at", "locked_at", "locked_by", "updated_at"])
+
+    return {"recovered": recovered, "reconciled": reconciled, "dead_lettered": dead_lettered}
+
+
+def process_queue(batch_size: int = 50, recover_stale: bool = True, stale_threshold_seconds: int = 300) -> dict:
     """
     Process pending queue items in priority and scheduled order.
     Employs pessimistic row-locking select_for_update(skip_locked=True)
     for safe multi-worker concurrency on PostgreSQL.
+    Automatically recovers stale locks from crashed workers.
     """
     now = timezone.now()
+    if recover_stale:
+        recover_stale_processing_items(stale_threshold_seconds=stale_threshold_seconds)
+
     processed = 0
     succeeded = 0
     failed = 0
+    worker_id = f"worker-{os.getpid()}"
 
     with transaction.atomic():
         items = list(
@@ -293,7 +365,7 @@ def process_queue(batch_size: int = 50) -> dict:
         for item in items:
             item.status = QueueStatus.PROCESSING
             item.locked_at = now
-            item.locked_by = "worker-pid"
+            item.locked_by = worker_id
             item.save(update_fields=["status", "locked_at", "locked_by", "updated_at"])
 
     for item in items:
@@ -502,10 +574,23 @@ def trigger_class_notification(
     if not member or not member.phone:
         return None
 
-    # Check if session is cancelled
+    # Check if session or booking is cancelled
     if target_session and getattr(target_session, "status", "") == "CANCELLED":
         if event_type != TriggerEvent.CLASS_CANCELLED:
             logger.info("Skipping reminder for cancelled session #%s", target_session.id)
+            return None
+        # Invalidate pending scheduled reminders for this cancelled session
+        ScheduledNotification.objects.filter(
+            context_data__session_id=target_session.id,
+            status=ScheduledStatus.SCHEDULED,
+        ).update(
+            status=ScheduledStatus.CANCELLED,
+            cancelled_reason="Class session was cancelled",
+        )
+
+    if booking and getattr(booking, "status", "") == "CANCELLED":
+        if event_type != TriggerEvent.CLASS_CANCELLED:
+            logger.info("Skipping reminder for cancelled booking #%s", booking.id)
             return None
 
     gym_name = get_gym_name()
@@ -662,6 +747,9 @@ def dispatch_scheduled_reminders() -> dict:
     # 1. Membership Expiry 7 Days
     day_7 = today + timedelta(days=7)
     for m in Membership.objects.filter(status="ACTIVE", end_date=day_7):
+        # Skip if member already has an active renewed membership starting on or after this one's end date
+        if Membership.objects.filter(member=m.member, status="ACTIVE", start_date__gte=m.end_date).exists():
+            continue
         res = trigger_membership_notification(TriggerEvent.MEMBERSHIP_EXPIRY_7D, m, send_immediately=False)
         if res:
             counts["expiry_7d"] += 1
@@ -669,6 +757,8 @@ def dispatch_scheduled_reminders() -> dict:
     # 2. Membership Expiry 3 Days
     day_3 = today + timedelta(days=3)
     for m in Membership.objects.filter(status="ACTIVE", end_date=day_3):
+        if Membership.objects.filter(member=m.member, status="ACTIVE", start_date__gte=m.end_date).exists():
+            continue
         res = trigger_membership_notification(TriggerEvent.MEMBERSHIP_EXPIRY_3D, m, send_immediately=False)
         if res:
             counts["expiry_3d"] += 1
@@ -676,12 +766,16 @@ def dispatch_scheduled_reminders() -> dict:
     # 3. Membership Expiry 1 Day
     day_1 = today + timedelta(days=1)
     for m in Membership.objects.filter(status="ACTIVE", end_date=day_1):
+        if Membership.objects.filter(member=m.member, status="ACTIVE", start_date__gte=m.end_date).exists():
+            continue
         res = trigger_membership_notification(TriggerEvent.MEMBERSHIP_EXPIRY_1D, m, send_immediately=False)
         if res:
             counts["expiry_1d"] += 1
 
     # 4. Expired today or yesterday
     for m in Membership.objects.filter(status="EXPIRED", end_date=today):
+        if Membership.objects.filter(member=m.member, status="ACTIVE", start_date__gte=m.end_date).exists():
+            continue
         res = trigger_membership_notification(TriggerEvent.MEMBERSHIP_EXPIRED, m, send_immediately=False)
         if res:
             counts["expired"] += 1
@@ -693,6 +787,23 @@ def dispatch_scheduled_reminders() -> dict:
             counts["overdue_invoices"] += 1
 
     return counts
+
+
+def invalidate_membership_expiry_reminders(membership) -> int:
+    """
+    Invalidates any pending scheduled expiry reminders for a member when a renewal is finalized.
+    """
+    member = getattr(membership, "member", None)
+    if not member:
+        return 0
+    return ScheduledNotification.objects.filter(
+        recipient_member=member,
+        category=NotificationCategory.MEMBERSHIP,
+        status=ScheduledStatus.SCHEDULED,
+    ).update(
+        status=ScheduledStatus.CANCELLED,
+        cancelled_reason=f"Membership #{membership.id} renewed or extended.",
+    )
 
 
 def execute_bulk_campaign(campaign: BulkCampaign, confirmed_by: User) -> dict:

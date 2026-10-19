@@ -8,4 +8,5 @@ urlpatterns = [
     path("reports/", views.communication_reports_view, name="notification-reports"),
     path("api/inapp/unread/", views.get_unread_in_app_notifications_api, name="inapp-unread-api"),
     path("api/inapp/<int:notification_id>/read/", views.mark_in_app_notification_read, name="inapp-mark-read"),
+    path("callbacks/<str:provider_code>/", views.sms_delivery_callback_view, name="sms-delivery-callback"),
 ]

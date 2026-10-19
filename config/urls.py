@@ -35,6 +35,7 @@ from apps.notifications.views import (
     communication_reports_view,
     get_unread_in_app_notifications_api,
     mark_in_app_notification_read,
+    sms_delivery_callback_view,
 )
 
 urlpatterns = [
@@ -66,5 +67,6 @@ urlpatterns = [
     path("admin/notifications/reports/", admin.site.admin_view(communication_reports_view), name="notification-reports"),
     path("admin/notifications/api/inapp/unread/", admin.site.admin_view(get_unread_in_app_notifications_api), name="inapp-unread-api"),
     path("admin/notifications/api/inapp/<int:notification_id>/read/", admin.site.admin_view(mark_in_app_notification_read), name="inapp-mark-read"),
+    path("admin/notifications/callbacks/<str:provider_code>/", sms_delivery_callback_view, name="sms-delivery-callback"),
     path("admin/", admin.site.urls),
 ]

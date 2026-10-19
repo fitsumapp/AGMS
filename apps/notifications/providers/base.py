@@ -7,7 +7,7 @@ from typing import Any, Dict
 class SMSResponse:
     success: bool
     provider_message_id: str = ""
-    status: str = "SENT"  # "SENT", "DELIVERED", "FAILED"
+    status: str = "ACCEPTED"  # "ACCEPTED" (API accepted), "SENT", "DELIVERED" (confirmed at handset), "FAILED", "UNKNOWN"
     raw_response: Dict[str, Any] = field(default_factory=dict)
     error: str = ""
 

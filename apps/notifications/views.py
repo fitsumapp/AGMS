@@ -1,4 +1,5 @@
 import csv
+import json
 from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -6,8 +7,10 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from apps.accounts.roles import is_owner
 from apps.branches.models import Branch
 from apps.members.models import Member
 from apps.memberships.models import MembershipPackage
@@ -94,7 +97,20 @@ def send_sms_view(request):
         branch_id = request.POST.get("branch_id")
         priority = request.POST.get("priority", NotificationPriority.NORMAL)
 
+        if branch_id and not user_branches.filter(id=branch_id).exists():
+            raise PermissionDenied("You do not have access to the selected branch.")
         branch = user_branches.filter(id=branch_id).first() if branch_id else user_branches.first()
+
+        # Recipient privacy & cross-branch protection
+        if recipient_phone and not (request.user.is_superuser or is_owner(request.user)):
+            try:
+                from apps.notifications.validators import normalize_ethiopian_phone
+                norm_phone = normalize_ethiopian_phone(recipient_phone)
+                other_branch_member = Member.objects.filter(phone=norm_phone).exclude(home_branch__in=user_branches).first()
+                if other_branch_member and other_branch_member.home_branch:
+                    raise PermissionDenied(f"Recipient belongs to another branch ({other_branch_member.home_branch.name}). Cross-branch messaging is restricted.")
+            except ValidationError:
+                pass
 
         if not recipient_phone:
             messages.error(request, "Recipient phone number is required.")
@@ -150,7 +166,9 @@ def bulk_campaign_view(request):
         package_id = request.POST.get("package_id")
         message_body = request.POST.get("message_body", "").strip()
 
-        branch = user_branches.filter(id=branch_id).first() if branch_id else None
+        if branch_id and not user_branches.filter(id=branch_id).exists():
+            raise PermissionDenied("You do not have permission to launch campaigns for the selected branch.")
+        branch = user_branches.filter(id=branch_id).first() if branch_id else (user_branches.first() if not (request.user.is_superuser or is_owner(request.user)) else None)
         package = packages.filter(id=package_id).first() if package_id else None
 
         if action == "execute":
@@ -302,3 +320,96 @@ def get_unread_in_app_notifications_api(request):
         for n in unread
     ]
     return JsonResponse({"count": len(data), "notifications": data})
+
+
+@csrf_exempt
+@require_POST
+def sms_delivery_callback_view(request, provider_code):
+    """
+    Secure delivery callback webhook for SMS gateways (e.g. AfroMessage, Custom HTTP).
+    Authenticates provider token, validates message ID, enforces valid state transitions,
+    and prevents replay/provider-spoofing attacks.
+    """
+    provider_code = provider_code.strip().upper()
+    provider_config = ProviderConfig.objects.filter(
+        provider_type=provider_code, is_active=True
+    ).first()
+
+    if not provider_config:
+        provider_config = ProviderConfig.objects.filter(
+            name__iexact=provider_code, is_active=True
+        ).first()
+
+    if not provider_config:
+        return JsonResponse({"error": "Unknown or inactive provider"}, status=404)
+
+    # 1. Authenticate callback token
+    expected_token = provider_config.get_api_key()
+    auth_header = request.headers.get("Authorization", "")
+    callback_secret = request.headers.get("X-Callback-Secret") or request.GET.get("token") or ""
+
+    received_token = ""
+    if auth_header.startswith("Bearer "):
+        received_token = auth_header[7:].strip()
+    elif callback_secret:
+        received_token = callback_secret.strip()
+
+    if expected_token and received_token != expected_token:
+        return JsonResponse({"error": "Unauthorized callback credentials"}, status=403)
+
+    # 2. Parse payload
+    try:
+        if request.content_type == "application/json":
+            payload = json.loads(request.body.decode("utf-8"))
+        else:
+            payload = request.POST.dict()
+    except Exception:
+        return JsonResponse({"error": "Invalid payload format"}, status=400)
+
+    provider_msg_id = payload.get("message_id") or payload.get("id") or payload.get("msg_id") or ""
+    if not provider_msg_id:
+        return JsonResponse({"error": "Missing message_id"}, status=400)
+
+    # 3. Find NotificationMessage - prevent one provider from modifying another provider's message
+    notif = NotificationMessage.objects.filter(
+        provider_message_id=str(provider_msg_id),
+        provider__iexact=provider_config.get_provider_type_display(),
+    ).first()
+
+    if not notif:
+        notif = NotificationMessage.objects.filter(
+            provider_message_id=str(provider_msg_id),
+            provider__iexact=provider_code,
+        ).first()
+
+    if not notif:
+        return JsonResponse({"error": "Notification record not found for provider"}, status=404)
+
+    # 4. Enforce valid state transitions & Replay Protection
+    raw_status = str(payload.get("status", "")).upper()
+    now = timezone.now()
+
+    if notif.status == NotificationStatus.DELIVERED:
+        return JsonResponse({"status": "acknowledged", "detail": "Already marked delivered"}, status=200)
+
+    if raw_status in ("DELIVERED", "SUCCESS", "COMPLETED"):
+        notif.status = NotificationStatus.DELIVERED
+        notif.delivered_at = now
+        notif.error_message = ""
+        notif.save(update_fields=["status", "delivered_at", "error_message", "updated_at"])
+    elif raw_status in ("FAILED", "UNDELIVERED", "REJECTED", "EXPIRED"):
+        if notif.status != NotificationStatus.DELIVERED:
+            notif.status = NotificationStatus.FAILED
+            notif.failed_at = now
+            notif.error_message = payload.get("error") or payload.get("reason") or "Delivery failed at handset"
+            notif.save(update_fields=["status", "failed_at", "error_message", "updated_at"])
+    elif raw_status in ("SENT", "ACCEPTED", "BUFFERED"):
+        if notif.status in (NotificationStatus.PENDING, NotificationStatus.QUEUED, NotificationStatus.SENDING):
+            notif.status = NotificationStatus.ACCEPTED
+            notif.sent_at = now
+            notif.save(update_fields=["status", "sent_at", "updated_at"])
+    else:
+        return JsonResponse({"error": f"Invalid delivery status: {raw_status}"}, status=400)
+
+    return JsonResponse({"status": "success", "message_id": notif.id, "delivery_status": notif.status})
+

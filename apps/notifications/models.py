@@ -28,9 +28,11 @@ class NotificationStatus(models.TextChoices):
     QUEUED = "QUEUED", _("Queued")
     SENDING = "SENDING", _("Sending")
     SENT = "SENT", _("Sent (Provider Accepted)")
+    ACCEPTED = "ACCEPTED", _("Accepted by Provider")
     DELIVERED = "DELIVERED", _("Confirmed Delivered")
     FAILED = "FAILED", _("Failed")
     CANCELLED = "CANCELLED", _("Cancelled")
+    UNKNOWN = "UNKNOWN", _("Unknown / Reconciliation Required")
 
 
 class NotificationCategory(models.TextChoices):
@@ -117,6 +119,7 @@ class QueueStatus(models.TextChoices):
     COMPLETED = "COMPLETED", _("Completed")
     FAILED = "FAILED", _("Failed")
     DEAD_LETTER = "DEAD_LETTER", _("Dead Letter")
+    UNKNOWN = "UNKNOWN", _("Unknown / Stale Lock")
 
 
 class ScheduledStatus(models.TextChoices):

@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 
+from apps.accounts.roles import is_owner
+from .permissions import can_manage_provider_config, get_user_notification_branches
 from .models import (
     AutomationRule,
     BulkCampaign,
@@ -21,6 +23,21 @@ class ProviderConfigAdmin(ModelAdmin):
     list_filter = ("provider_type", "is_active", "is_default", "branch")
     search_fields = ("name", "sender_id", "api_url")
     readonly_fields = ("created_at", "updated_at")
+
+    def has_module_permission(self, request):
+        return can_manage_provider_config(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return can_manage_provider_config(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return can_manage_provider_config(request.user)
+
+    def has_add_permission(self, request):
+        return can_manage_provider_config(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return can_manage_provider_config(request.user)
 
 
 @admin.register(MessageTemplate)
@@ -54,6 +71,13 @@ class BulkCampaignAdmin(ModelAdmin):
     search_fields = ("title", "message_body")
     readonly_fields = ("total_recipients", "sent_count", "failed_count", "confirmed_at", "confirmed_by", "created_at")
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or is_owner(request.user):
+            return qs
+        user_branches = get_user_notification_branches(request.user)
+        return qs.filter(branch__in=user_branches)
+
     def status_badge(self, obj):
         colors = {
             "DRAFT": "gray",
@@ -81,15 +105,33 @@ class NotificationMessageAdmin(ModelAdmin):
         "provider_response", "error_message", "idempotency_key", "created_at", "updated_at"
     )
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or is_owner(request.user):
+            return qs
+        user_branches = get_user_notification_branches(request.user)
+        return qs.filter(branch__in=user_branches)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     def status_badge(self, obj):
         colors = {
             "PENDING": "gray",
             "QUEUED": "orange",
             "SENDING": "blue",
             "SENT": "teal",
+            "ACCEPTED": "teal",
             "DELIVERED": "green",
             "FAILED": "red",
             "CANCELLED": "purple",
+            "UNKNOWN": "#6b21a8",
         }
         color = colors.get(obj.status, "gray")
         return format_html(
@@ -118,6 +160,13 @@ class ScheduledNotificationAdmin(ModelAdmin):
     list_filter = ("status", "channel", "category", "branch")
     search_fields = ("phone", "email", "idempotency_key")
     readonly_fields = ("dispatched_notification", "created_at")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or is_owner(request.user):
+            return qs
+        user_branches = get_user_notification_branches(request.user)
+        return qs.filter(branch__in=user_branches)
 
     def target_recipient(self, obj):
         return obj.phone or obj.email or "Recipient"

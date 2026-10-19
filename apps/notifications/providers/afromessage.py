@@ -94,10 +94,45 @@ class AfroMessageSMSProvider(BaseSMSProvider):
             )
 
     def check_delivery_status(self, provider_message_id: str) -> SMSResponse:
-        # AfroMessage status callback check
-        return SMSResponse(
-            success=True,
-            provider_message_id=provider_message_id,
-            status="SENT",
-            raw_response={"status": "SENT", "note": "Status polling not configured; relies on webhook"},
+        """
+        Query delivery status from AfroMessage API by provider message ID.
+        Distinguishes API acceptance from final handset delivery.
+        """
+        if not self.api_key:
+            return SMSResponse(
+                success=False,
+                provider_message_id=provider_message_id,
+                status="UNKNOWN",
+                error="AfroMessage API token is not configured in environment.",
+                raw_response={"error": "missing_credentials"},
+            )
+
+        status_url = f"https://api.afromessage.com/api/status?message_id={urllib.request.quote(str(provider_message_id))}"
+        req = urllib.request.Request(
+            status_url,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "User-Agent": "AGMS-Gym-ERP/1.0",
+            },
+            method="GET",
         )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                resp_data = resp.read().decode("utf-8")
+                parsed = json.loads(resp_data)
+                deliv_status = parsed.get("status") or parsed.get("response", {}).get("status", "SENT")
+                mapped = "DELIVERED" if deliv_status == "DELIVERED" else ("FAILED" if deliv_status in ("FAILED", "UNDELIVERED") else "ACCEPTED")
+                return SMSResponse(
+                    success=(mapped in ("DELIVERED", "ACCEPTED", "SENT")),
+                    provider_message_id=provider_message_id,
+                    status=mapped,
+                    raw_response=parsed,
+                )
+        except Exception as exc:
+            return SMSResponse(
+                success=False,
+                provider_message_id=provider_message_id,
+                status="UNKNOWN",
+                error=f"Status check failed: {str(exc)}",
+                raw_response={"error": str(exc)},
+            )
