@@ -52,6 +52,8 @@ from apps.facilities.services import (
     complete_cleaning_task,
     record_facility_inspection,
     record_incident_report,
+    reconcile_equipment_status,
+    complete_locker_deposit_refund,
 )
 
 pytestmark = pytest.mark.django_db
@@ -1016,3 +1018,362 @@ def test_facility_http_views(client, users):
     client.force_login(pos_staff)
     assert client.get(reverse("facility-dashboard")).status_code == 403
     assert client.get(reverse("facility-reports")).status_code == 403
+
+
+# ==============================================================================
+# 9. Final Hardening Tests: Financial Integrity, Concurrency & Security
+# ==============================================================================
+
+def test_deposit_status_lifecycle_and_authoritative_billing_refund(users, member, locker_setup):
+    """Verify full deposit lifecycle: charged -> paid -> refunded via Phase 05 Billing."""
+    receptionist = users["receptionist"]
+    manager = users["manager"]
+    l1 = locker_setup["locker1"]
+
+    assignment = assign_locker(
+        actor=receptionist,
+        locker=l1,
+        member=member,
+        assignment_type=LockerAssignment.AssignmentType.DAILY,
+        charged_fee_etb=Decimal("50.00"),
+        deposit_amount_etb=Decimal("200.00"),
+        create_billing_invoice=True,
+    )
+
+    assert assignment.deposit_status == LockerAssignment.DepositStatus.PENDING
+    assert assignment.invoice is not None
+
+    # Member pays invoice in full (50 rental + 200 refundable deposit liability)
+    from apps.billing.models import PaymentMethod
+    from apps.billing.services import record_payment, verify_payment
+
+    pm, _ = PaymentMethod.objects.get_or_create(code="CASH", defaults={"name": "Cash", "method_type": "CASH"})
+    pay = record_payment(
+        actor=receptionist,
+        invoice=assignment.invoice,
+        amount=assignment.invoice.total_amount,
+        payment_method=pm,
+    )
+    verify_payment(actor=manager, payment=pay)
+    assignment.invoice.refresh_from_db()
+    assert assignment.invoice.status == "PAID"
+
+    # Member returns key: refund requested by receptionist (creates pending obligation)
+    released = release_locker(
+        assignment=assignment,
+        user=receptionist,
+        key_returned=True,
+        refund_deposit=True,
+    )
+
+    assert released.status == LockerAssignment.Status.COMPLETED
+    assert released.deposit_refunded_etb == Decimal("0.00")
+    assert released.deposit_status == LockerAssignment.DepositStatus.REFUND_PENDING
+    assert released.billing_refund is not None
+    assert released.billing_refund.amount == Decimal("200.00")
+    assert released.billing_refund.status == "REQUESTED"
+
+    # Branch Manager approves the refund (4-eyes financial control): liability extinguished
+    finalized = complete_locker_deposit_refund(actor=manager, assignment=released)
+    assert finalized.deposit_refunded_etb == Decimal("200.00")
+    assert finalized.deposit_status == LockerAssignment.DepositStatus.REFUNDED
+    assert finalized.billing_refund.status == "COMPLETED"
+
+
+def test_deposit_refund_cannot_exceed_collected_amount(users, member, locker_setup):
+    """When an invoice is partially paid covering only fee, no deposit can be refunded."""
+    receptionist = users["receptionist"]
+    manager = users["manager"]
+    l1 = locker_setup["locker1"]
+
+    assignment = assign_locker(
+        actor=receptionist,
+        locker=l1,
+        member=member,
+        assignment_type=LockerAssignment.AssignmentType.DAILY,
+        charged_fee_etb=Decimal("50.00"),
+        deposit_amount_etb=Decimal("200.00"),
+        create_billing_invoice=True,
+    )
+
+    # Member only pays the 50 ETB fee, deposit is not paid
+    from apps.billing.models import PaymentMethod
+    from apps.billing.services import record_payment, verify_payment
+
+    pm, _ = PaymentMethod.objects.get_or_create(code="CASH", defaults={"name": "Cash", "method_type": "CASH"})
+    pay = record_payment(
+        actor=receptionist,
+        invoice=assignment.invoice,
+        amount=Decimal("50.00"),
+        payment_method=pm,
+    )
+    verify_payment(actor=manager, payment=pay)
+    assignment.invoice.refresh_from_db()
+    assert assignment.invoice.paid_amount == Decimal("50.00")
+
+    # Release locker: since deposit was never collected, refunded amount is 0 ETB
+    released = release_locker(
+        assignment=assignment,
+        user=receptionist,
+        key_returned=True,
+        refund_deposit=True,
+    )
+
+    assert released.deposit_refunded_etb == Decimal("0.00")
+    assert released.deposit_status == LockerAssignment.DepositStatus.REFUND_PENDING
+
+
+def test_forfeited_deposit_cannot_be_refunded(users, member, locker_setup):
+    """A forfeited deposit due to lost key cannot subsequently be refunded upon release."""
+    receptionist = users["receptionist"]
+    l1 = locker_setup["locker1"]
+
+    assignment = assign_locker(
+        actor=receptionist,
+        locker=l1,
+        member=member,
+        assignment_type=LockerAssignment.AssignmentType.DAILY,
+        deposit_amount_etb=Decimal("200.00"),
+    )
+
+    # Key lost and deposit forfeited
+    incident = record_locker_incident(
+        actor=receptionist,
+        locker=l1,
+        assignment=assignment,
+        incident_type=LockerIncident.IncidentType.LOST_KEY,
+        forfeit_deposit=True,
+    )
+
+    assignment.refresh_from_db()
+    assert assignment.deposit_status == LockerAssignment.DepositStatus.FORFEITED
+    assert incident.deposit_forfeited_etb == Decimal("200.00")
+
+    # Releasing locker after forfeiture must not disburse any refund
+    released = release_locker(
+        assignment=assignment,
+        user=receptionist,
+        key_returned=False,
+        refund_deposit=True,
+    )
+
+    assert released.deposit_refunded_etb == Decimal("0.00")
+    assert released.deposit_status == LockerAssignment.DepositStatus.FORFEITED
+    l1.refresh_from_db()
+    assert l1.status == Locker.LockerStatus.OUT_OF_SERVICE
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_locker_release_prevented_by_lock(users, member, locker_setup):
+    """Two concurrent release requests on the same assignment serialize and one fails."""
+    receptionist = users["receptionist"]
+    l1 = locker_setup["locker1"]
+
+    assignment = assign_locker(
+        actor=receptionist,
+        locker=l1,
+        member=member,
+        assignment_type=LockerAssignment.AssignmentType.DAILY,
+        deposit_amount_etb=Decimal("200.00"),
+    )
+
+    asg_id = assignment.pk
+    results = []
+    errors = []
+
+    def perform_release():
+        from django.db import connection
+        try:
+            target = LockerAssignment.objects.get(pk=asg_id)
+            res = release_locker(
+                assignment=target,
+                user=receptionist,
+                key_returned=True,
+                refund_deposit=True,
+            )
+            results.append(res)
+        except Exception as e:
+            errors.append(e)
+        finally:
+            connection.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(perform_release)
+        f2 = executor.submit(perform_release)
+        concurrent.futures.wait([f1, f2])
+
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert "already" in str(errors[0]).lower()
+
+
+def test_equipment_status_reconciler_overlapping_work_orders(users, branches, equipment_setup):
+    """
+    Scenario: Equipment has two active maintenance work orders.
+    Resolving order A must NOT return equipment to OPERATIONAL while order B is active.
+    """
+    b1, _ = branches
+    mgr = users["manager"]
+    eq = equipment_setup["equipment"]
+
+    # Initially operational
+    assert eq.status == Equipment.OperationalStatus.OPERATIONAL
+
+    # 1. Create first fault and work order
+    fault1 = create_fault_report(actor=mgr, branch=b1, equipment=eq, title="Belt wear", description="Treadmill belt slip")
+    wo1 = convert_fault_to_work_order(actor=mgr, fault_report=fault1, priority=MaintenanceWorkOrder.Priority.MEDIUM)
+
+    # 2. Create second urgent fault and work order on the SAME equipment
+    fault2 = create_fault_report(actor=mgr, branch=b1, equipment=eq, title="Incline motor burnt", description="Smoke from motor")
+    wo2 = convert_fault_to_work_order(actor=mgr, fault_report=fault2, priority=MaintenanceWorkOrder.Priority.URGENT)
+
+    eq.refresh_from_db()
+    assert eq.status == Equipment.OperationalStatus.OUT_OF_SERVICE
+
+    # Start and resolve Work Order 1
+    update_work_order_status(actor=mgr, work_order=wo1, new_status=MaintenanceWorkOrder.Status.IN_PROGRESS)
+    update_work_order_status(actor=mgr, work_order=wo1, new_status=MaintenanceWorkOrder.Status.RESOLVED)
+
+    # Critical check: Equipment MUST NOT be OPERATIONAL because WO2 is still open!
+    eq.refresh_from_db()
+    assert eq.status != Equipment.OperationalStatus.OPERATIONAL
+    assert eq.status in (Equipment.OperationalStatus.UNDER_MAINTENANCE, Equipment.OperationalStatus.OUT_OF_SERVICE)
+
+    # Now resolve Work Order 2
+    update_work_order_status(actor=mgr, work_order=wo2, new_status=MaintenanceWorkOrder.Status.IN_PROGRESS)
+    update_work_order_status(actor=mgr, work_order=wo2, new_status=MaintenanceWorkOrder.Status.RESOLVED)
+
+    # Now that all active work orders and faults are resolved, equipment becomes OPERATIONAL
+    eq.refresh_from_db()
+    assert eq.status == Equipment.OperationalStatus.OPERATIONAL
+
+
+def test_decommissioned_equipment_never_reactivated(users, branches, equipment_setup):
+    """Decommissioned/retired equipment cannot be made operational by closing a work order."""
+    b1, _ = branches
+    mgr = users["manager"]
+    eq = equipment_setup["equipment"]
+
+    eq.status = Equipment.OperationalStatus.RETIRED
+    eq.save(update_fields=["status"])
+
+    fault = create_fault_report(actor=mgr, branch=b1, equipment=eq, title="Old motor test", description="...")
+    wo = convert_fault_to_work_order(actor=mgr, fault_report=fault)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.IN_PROGRESS)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.RESOLVED)
+
+    eq.refresh_from_db()
+    assert eq.status == Equipment.OperationalStatus.RETIRED
+
+
+def test_post_work_order_expense_concurrency_and_idempotency(users, branches, equipment_setup):
+    """Verify idempotent posting and duplicate expense prevention."""
+    b1, _ = branches
+    mgr = users["manager"]
+    eq = equipment_setup["equipment"]
+
+    fault = create_fault_report(actor=mgr, branch=b1, equipment=eq, title="Bearing fix", description="...")
+    wo = convert_fault_to_work_order(actor=mgr, fault_report=fault)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.IN_PROGRESS)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.RESOLVED, service_cost_etb=Decimal("1200.00"))
+
+    # Initial posting succeeds
+    exp1 = post_work_order_expense_to_finance(work_order=wo, actor=mgr)
+    assert exp1 is not None
+
+    # Idempotent retry returns existing expense safely
+    exp2 = post_work_order_expense_to_finance(work_order=wo, actor=mgr, idempotent=True)
+    assert exp2.id == exp1.id
+
+    # Non-idempotent retry raises ValidationError
+    with pytest.raises(ValidationError):
+        post_work_order_expense_to_finance(work_order=wo, actor=mgr, idempotent=False)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_preventive_scheduler_concurrency_no_duplicate_orders(users, branches, equipment_setup):
+    """Concurrent scheduler executions generate exactly one work order per schedule."""
+    b1, _ = branches
+    area = equipment_setup["area"]
+    eq = equipment_setup["equipment"]
+    today = timezone.localdate()
+
+    sched = MaintenanceSchedule.objects.create(
+        branch=b1,
+        equipment=eq,
+        title="Weekly Belt Lubrication",
+        frequency=MaintenanceSchedule.Frequency.WEEKLY,
+        interval_days=7,
+        next_run_date=today,
+        is_active=True,
+    )
+
+    created_orders = []
+
+    def run_scheduler():
+        from django.db import connection
+        try:
+            orders = generate_preventive_work_orders(today=today)
+            created_orders.extend(orders)
+        finally:
+            connection.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(run_scheduler)
+        f2 = executor.submit(run_scheduler)
+        concurrent.futures.wait([f1, f2])
+
+    # Exactly one work order generated across both threads for this schedule
+    sched_orders = [o for o in created_orders if o.schedule_id == sched.id]
+    assert len(sched_orders) == 1
+
+    sched.refresh_from_db()
+    assert sched.next_run_date == today + timedelta(days=7)
+
+
+def test_disabled_schedule_skipped_by_scheduler(users, branches, equipment_setup):
+    """Disabled schedules are ignored by preventive work order generator."""
+    b1, _ = branches
+    eq = equipment_setup["equipment"]
+    today = timezone.localdate()
+
+    sched = MaintenanceSchedule.objects.create(
+        branch=b1,
+        equipment=eq,
+        title="Disabled Sauna Service",
+        frequency=MaintenanceSchedule.Frequency.MONTHLY,
+        interval_days=30,
+        next_run_date=today,
+        is_active=False,
+    )
+
+    orders = generate_preventive_work_orders(today=today)
+    assert not any(o.schedule_id == sched.id for o in orders)
+
+
+def test_trainer_cannot_post_maintenance_expense(users, branches, equipment_setup):
+    """Trainers are strictly denied permission to post financial maintenance expenses."""
+    b1, _ = branches
+    mgr = users["manager"]
+    trainer = users["trainer"]
+    eq = equipment_setup["equipment"]
+
+    fault = create_fault_report(actor=mgr, branch=b1, equipment=eq, title="Cable replacement", description="...")
+    wo = convert_fault_to_work_order(actor=mgr, fault_report=fault)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.IN_PROGRESS)
+    update_work_order_status(actor=mgr, work_order=wo, new_status=MaintenanceWorkOrder.Status.RESOLVED, service_cost_etb=Decimal("300.00"))
+
+    with pytest.raises(PermissionDenied):
+        post_work_order_expense_to_finance(work_order=wo, actor=trainer)
+
+
+def test_cross_branch_work_order_creation_blocked(users, branches, equipment_setup):
+    """A Branch Manager cannot create work orders for equipment in another branch."""
+    mgr2 = users["manager2"]  # Branch 2 manager
+    eq_b1 = equipment_setup["equipment"]  # Branch 1 equipment
+
+    fault_b1 = create_fault_report(actor=users["manager"], branch=branches[0], equipment=eq_b1, title="Screen dead", description="...")
+
+    with pytest.raises(PermissionDenied):
+        convert_fault_to_work_order(actor=mgr2, fault_report=fault_b1)
+

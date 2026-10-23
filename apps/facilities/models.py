@@ -230,6 +230,15 @@ class LockerAssignment(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))],
         verbose_name=_("Deposit Refunded (ETB)"),
     )
+    class DepositStatus(models.TextChoices):
+        NOT_APPLICABLE = "NOT_APPLICABLE", _("Not Applicable")
+        PENDING = "PENDING", _("Pending Collection")
+        HELD = "HELD", _("Held (Liability)")
+        REFUNDED = "REFUNDED", _("Refunded in Full")
+        PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED", _("Partially Refunded")
+        FORFEITED = "FORFEITED", _("Forfeited")
+        REFUND_PENDING = "REFUND_PENDING", _("Refund Pending / Obligation")
+
     invoice = models.ForeignKey(
         "billing.Invoice",
         on_delete=models.SET_NULL,
@@ -237,6 +246,21 @@ class LockerAssignment(models.Model):
         blank=True,
         related_name="locker_assignments",
         verbose_name=_("Billing Invoice"),
+    )
+    billing_refund = models.ForeignKey(
+        "billing.Refund",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="locker_assignments",
+        verbose_name=_("Billing Refund"),
+    )
+    deposit_status = models.CharField(
+        max_length=30,
+        choices=DepositStatus.choices,
+        default=DepositStatus.PENDING,
+        db_index=True,
+        verbose_name=_("Deposit Status"),
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -889,6 +913,13 @@ class MaintenanceWorkOrder(models.Model):
         ordering = ["-created_at"]
         verbose_name = _("Maintenance Work Order")
         verbose_name_plural = _("Maintenance Work Orders")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["finance_expense"],
+                condition=models.Q(finance_expense__isnull=False),
+                name="unique_finance_expense_per_work_order",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.work_order_number}: {self.title} [{self.get_status_display()}]"

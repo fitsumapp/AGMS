@@ -27,6 +27,7 @@ from apps.facilities.models import (
     FacilityInspection,
     IncidentReport,
 )
+from apps.accounts.roles import has_role, is_owner
 from apps.facilities.permissions import (
     can_assign_locker,
     can_manage_facility,
@@ -123,6 +124,11 @@ def assign_locker(
             fee_charged_etb=fee,
             deposit_charged_etb=deposit,
             deposit_refunded_etb=Decimal("0.00"),
+            deposit_status=(
+                LockerAssignment.DepositStatus.PENDING
+                if deposit > Decimal("0.00")
+                else LockerAssignment.DepositStatus.NOT_APPLICABLE
+            ),
             assigned_by=actor,
             notes=notes,
         )
@@ -174,10 +180,17 @@ def release_locker(
     returned_date=None,
     key_returned: bool = True,
     refund_deposit: bool = True,
+    refund_amount_etb: Decimal = None,
     notes: str = "",
 ) -> LockerAssignment:
     """
     Release an assigned locker, update physical unit availability, and process key return/deposit refund.
+    Guarantees:
+    - Concurrency row-locking prevents duplicate release requests or double refunds.
+    - Refunds cannot exceed collected refundable deposits.
+    - Integrates with Phase 05 Billing for authoritative payment tracking and refund issuance.
+    - If refund fails or cannot be issued immediately, marks deposit_status as REFUND_PENDING.
+    - Forfeited deposits are never refunded.
     """
     actor = actor or user
     branch = assignment.branch
@@ -199,8 +212,95 @@ def release_locker(
         if notes:
             asg.notes = f"{asg.notes}\nRelease note: {notes}".strip()
 
-        if refund_deposit and key_returned and asg.deposit_charged_etb > Decimal("0.00"):
-            asg.deposit_refunded_etb = asg.deposit_charged_etb
+        # Calculate forfeited deposits from recorded incidents
+        forfeited_etb = LockerIncident.objects.filter(assignment=asg).aggregate(
+            tot=models.Sum("deposit_forfeited_etb")
+        )["tot"] or Decimal("0.00")
+
+        # Determine actually collected deposit amount
+        if asg.invoice:
+            # Under authoritative billing, rental fees are cleared first, then refundable deposit liability
+            collected_deposit = max(Decimal("0.00"), asg.invoice.paid_amount - asg.fee_charged_etb)
+        else:
+            collected_deposit = asg.deposit_charged_etb
+
+        # Maximum refundable is capped by unrefunded, unforfeited, and actually collected amount
+        remaining_deposit = max(Decimal("0.00"), asg.deposit_charged_etb - asg.deposit_refunded_etb - forfeited_etb)
+        max_refundable = min(remaining_deposit, collected_deposit)
+
+        if refund_amount_etb is not None:
+            target_refund = min(max_refundable, Decimal(str(refund_amount_etb)))
+        else:
+            target_refund = max_refundable
+
+        if refund_deposit and key_returned:
+            if target_refund > Decimal("0.00"):
+                if asg.invoice:
+                    from apps.billing.models import Payment
+                    from apps.billing.services import request_refund, approve_refund
+                    verified_pay = Payment.objects.filter(
+                        invoice=asg.invoice,
+                        status=Payment.Status.VERIFIED,
+                    ).order_by("-paid_at").first()
+
+                    if verified_pay:
+                        try:
+                            ref_rec = request_refund(
+                                actor=actor,
+                                payment=verified_pay,
+                                amount=target_refund,
+                                reason=f"Locker {asg.locker.locker_number} key returned deposit refund",
+                            )
+                            if is_owner(actor) or has_role(actor, "Branch Manager"):
+                                try:
+                                    approve_refund(actor=actor, refund=ref_rec, approve=True)
+                                except Exception:
+                                    pass
+                            
+                            asg.billing_refund = ref_rec
+                            ref_rec.refresh_from_db()
+                            if getattr(ref_rec, "status", None) == "COMPLETED":
+                                asg.deposit_refunded_etb += target_refund
+                                asg.deposit_status = (
+                                    LockerAssignment.DepositStatus.REFUNDED
+                                    if asg.deposit_refunded_etb >= asg.deposit_charged_etb
+                                    else LockerAssignment.DepositStatus.PARTIALLY_REFUNDED
+                                )
+                            else:
+                                asg.deposit_status = LockerAssignment.DepositStatus.REFUND_PENDING
+                        except Exception as e:
+                            asg.deposit_status = LockerAssignment.DepositStatus.REFUND_PENDING
+                            asg.notes = f"{asg.notes}\nRefund error/pending: {e}".strip()
+                    else:
+                        # Invoice exists but no payment collected
+                        asg.deposit_status = LockerAssignment.DepositStatus.REFUND_PENDING
+                        asg.notes = f"{asg.notes}\nDeposit refund pending payment collection/clearance.".strip()
+                else:
+                    # Reception desk direct cash refund
+                    asg.deposit_refunded_etb += target_refund
+                    asg.deposit_status = (
+                        LockerAssignment.DepositStatus.REFUNDED
+                        if asg.deposit_refunded_etb >= asg.deposit_charged_etb
+                        else LockerAssignment.DepositStatus.PARTIALLY_REFUNDED
+                    )
+            elif forfeited_etb > Decimal("0.00"):
+                asg.deposit_status = LockerAssignment.DepositStatus.FORFEITED
+            else:
+                asg.deposit_status = (
+                    LockerAssignment.DepositStatus.NOT_APPLICABLE
+                    if asg.deposit_charged_etb == Decimal("0.00")
+                    else (
+                        LockerAssignment.DepositStatus.REFUNDED
+                        if asg.deposit_refunded_etb >= asg.deposit_charged_etb
+                        else LockerAssignment.DepositStatus.REFUND_PENDING
+                    )
+                )
+        else:
+            # Key not returned or refund declined
+            if forfeited_etb > Decimal("0.00"):
+                asg.deposit_status = LockerAssignment.DepositStatus.FORFEITED
+            elif asg.deposit_charged_etb > Decimal("0.00"):
+                asg.deposit_status = LockerAssignment.DepositStatus.HELD
 
         asg.save()
 
@@ -210,6 +310,40 @@ def release_locker(
             locked_locker.status = Locker.LockerStatus.AVAILABLE
         locked_locker.save(update_fields=["status", "updated_at"])
 
+        return asg
+
+
+def complete_locker_deposit_refund(
+    *,
+    actor: User,
+    assignment: LockerAssignment,
+    admin_notes: str = "",
+) -> LockerAssignment:
+    """
+    Sync and finalize locker assignment deposit status when an authoritative billing refund is approved.
+    Enforces separation of duties via billing services.
+    """
+    with transaction.atomic():
+        asg = LockerAssignment.objects.select_for_update().get(pk=assignment.pk)
+        if not asg.billing_refund:
+            raise ValidationError(_("No billing refund linked to this assignment."))
+
+        ref = asg.billing_refund
+        ref.refresh_from_db()
+        if ref.status == "REQUESTED":
+            from apps.billing.services import approve_refund
+            approve_refund(actor=actor, refund=ref, approve=True, admin_notes=admin_notes)
+            ref.refresh_from_db()
+
+        if ref.status == "COMPLETED":
+            if asg.deposit_refunded_etb < ref.amount:
+                asg.deposit_refunded_etb += ref.amount
+            asg.deposit_status = (
+                LockerAssignment.DepositStatus.REFUNDED
+                if asg.deposit_refunded_etb >= asg.deposit_charged_etb
+                else LockerAssignment.DepositStatus.PARTIALLY_REFUNDED
+            )
+            asg.save(update_fields=["deposit_refunded_etb", "deposit_status", "updated_at"])
         return asg
 
 
@@ -231,8 +365,10 @@ def record_locker_incident(
     if not can_assign_locker(actor, branch):
         raise PermissionDenied(_("You do not have permission to record locker incidents."))
 
-    if forfeit_deposit and assignment and deposit_forfeited_etb == Decimal("0.00"):
-        deposit_forfeited_etb = assignment.deposit_charged_etb
+    if forfeit_deposit and assignment:
+        unforfeited = max(Decimal("0.00"), assignment.deposit_charged_etb - assignment.deposit_refunded_etb)
+        if deposit_forfeited_etb == Decimal("0.00"):
+            deposit_forfeited_etb = unforfeited
 
     final_notes = notes or details
 
@@ -252,6 +388,10 @@ def record_locker_incident(
             recorded_by=actor,
             notes=final_notes,
         )
+
+        if forfeit_deposit and assignment:
+            assignment.deposit_status = LockerAssignment.DepositStatus.FORFEITED
+            assignment.save(update_fields=["deposit_status", "updated_at"])
 
         # If lock was damaged, mark locker as out of service
         if incident_type in (LockerIncident.IncidentType.DAMAGED_LOCK, LockerIncident.IncidentType.DAMAGED_DOOR):
@@ -398,10 +538,66 @@ def convert_fault_to_work_order(
         fault.save(update_fields=["status", "updated_at"])
 
         if fault.equipment:
-            fault.equipment.status = Equipment.OperationalStatus.UNDER_MAINTENANCE
-            fault.equipment.save(update_fields=["status", "updated_at"])
+            reconcile_equipment_status(fault.equipment)
 
         return work_order
+
+
+def reconcile_equipment_status(equipment: Equipment) -> Equipment:
+    """
+    Authoritative state reconciliation for equipment physical status.
+    Guarantees:
+    - DECOMMISSIONED/RETIRED equipment is never automatically made operational.
+    - Active blocking work orders (IN_PROGRESS, ASSIGNED, REPORTED) or open faults
+      prevent equipment from returning to OPERATIONAL prematurely.
+    - If any work order is URGENT/CRITICAL or EMERGENCY breakdown, equipment is OUT_OF_ORDER.
+    - If any work order is IN_PROGRESS or active, equipment is UNDER_MAINTENANCE.
+    - Only when ALL active work orders and faults are resolved/closed does equipment become OPERATIONAL.
+    - Employs deterministic row-locking (select_for_update).
+    """
+    with transaction.atomic():
+        eq = Equipment.objects.select_for_update().get(pk=equipment.pk)
+        if eq.status in (Equipment.OperationalStatus.RETIRED, Equipment.OperationalStatus.DISPOSED):
+            return eq
+
+        # Check for active work orders
+        active_orders = MaintenanceWorkOrder.objects.filter(
+            equipment=eq,
+            status__in=[
+                MaintenanceWorkOrder.Status.REPORTED,
+                MaintenanceWorkOrder.Status.ASSIGNED,
+                MaintenanceWorkOrder.Status.IN_PROGRESS,
+            ],
+        )
+
+        # Check for active unresolved fault reports
+        active_faults = FaultReport.objects.filter(
+            equipment=eq,
+            status__in=[
+                FaultReport.Status.REPORTED,
+                FaultReport.Status.ASSIGNED,
+                FaultReport.Status.IN_PROGRESS,
+            ],
+        )
+
+        has_critical = (
+            active_orders.filter(priority__in=[MaintenanceWorkOrder.Priority.URGENT, MaintenanceWorkOrder.Priority.CRITICAL]).exists()
+            or active_orders.filter(order_type=MaintenanceWorkOrder.OrderType.EMERGENCY).exists()
+            or active_faults.filter(priority=FaultReport.Priority.URGENT).exists()
+        )
+        has_in_progress = active_orders.filter(status=MaintenanceWorkOrder.Status.IN_PROGRESS).exists()
+        has_any_active = active_orders.exists() or active_faults.exists()
+
+        if has_critical:
+            eq.status = Equipment.OperationalStatus.OUT_OF_SERVICE
+        elif has_in_progress or has_any_active:
+            eq.status = Equipment.OperationalStatus.UNDER_MAINTENANCE
+        else:
+            eq.status = Equipment.OperationalStatus.OPERATIONAL
+            eq.last_maintenance_date = timezone.localdate()
+
+        eq.save(update_fields=["status", "last_maintenance_date", "updated_at"])
+        return eq
 
 
 def update_work_order_status(
@@ -469,7 +665,9 @@ def update_work_order_status(
         if downtime_hours is not None:
             wo.downtime_hours = downtime_hours
             if wo.equipment:
-                wo.equipment.total_downtime_hours += downtime_hours
+                Equipment.objects.filter(pk=wo.equipment.pk).update(
+                    total_downtime_hours=models.F("total_downtime_hours") + downtime_hours
+                )
 
         if spare_parts_used:
             wo.spare_parts_used = spare_parts_used
@@ -477,19 +675,16 @@ def update_work_order_status(
         wo.status = new_status
         wo.save()
 
-        # Update equipment status if resolved or closed
-        if wo.equipment:
-            if new_status in (MaintenanceWorkOrder.Status.RESOLVED, MaintenanceWorkOrder.Status.CLOSED):
-                wo.equipment.status = Equipment.OperationalStatus.OPERATIONAL
-                wo.equipment.last_maintenance_date = timezone.localdate()
-                wo.equipment.save(update_fields=["status", "last_maintenance_date", "total_downtime_hours", "updated_at"])
-
-        # Also update linked fault report if present
+        # Update linked fault report if present BEFORE reconciling equipment status
         if wo.fault_report and new_status in (MaintenanceWorkOrder.Status.RESOLVED, MaintenanceWorkOrder.Status.CLOSED):
             wo.fault_report.status = FaultReport.Status.RESOLVED
             wo.fault_report.resolved_at = now
             wo.fault_report.resolution_notes = resolution_notes or wo.resolution_notes
             wo.fault_report.save(update_fields=["status", "resolved_at", "resolution_notes", "updated_at"])
+
+        # Update equipment status via centralized reconciler
+        if wo.equipment:
+            reconcile_equipment_status(wo.equipment)
 
         return wo
 
@@ -498,6 +693,7 @@ def post_work_order_expense_to_finance(
     work_order: MaintenanceWorkOrder,
     actor: User = None,
     *,
+    idempotent: bool = False,
     expense_category=None,
     payment_due_date=None,
     supplier=None,
@@ -520,6 +716,8 @@ def post_work_order_expense_to_finance(
     with transaction.atomic():
         wo = MaintenanceWorkOrder.objects.select_for_update().get(pk=work_order.pk)
         if wo.finance_expense:
+            if idempotent:
+                return wo.finance_expense
             raise ValidationError(_("This work order already has an associated financial expense record."))
 
         if wo.total_cost_etb <= Decimal("0.00"):
