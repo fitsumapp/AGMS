@@ -1,0 +1,170 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">health_and_safety</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Operational System Health" %}
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        {% trans "Live infrastructure monitoring, PostgreSQL connectivity, background queue statuses, and pending operational approvals." %}
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold {% if metrics.status == 'ONLINE' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400{% else %}bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400{% endif %}">
+        <span class="w-2 h-2 rounded-full {% if metrics.status == 'ONLINE' %}bg-emerald-500 animate-pulse{% else %}bg-rose-500{% endif %}"></span>
+        {{ metrics.status }}
+      </span>
+      <a href="" class="p-1.5 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg hover:bg-base-50 dark:hover:bg-base-800 text-subtle transition" title="Refresh">
+        <span class="material-symbols-outlined text-sm">refresh</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Primary Infrastructure Status Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Database Connection -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>PostgreSQL 18</span>
+        <span class="material-symbols-outlined text-xs">database</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        {% if metrics.database.connected %}
+          <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">Connected</span>
+          <span class="text-xs text-subtle font-mono">{{ metrics.database.latency_ms }} ms</span>
+        {% else %}
+          <span class="text-xl font-bold text-rose-600 dark:text-rose-400">Disconnected</span>
+        {% endif %}
+      </div>
+      <p class="text-[11px] text-subtle mt-1">Primary transactional datastore</p>
+    </div>
+
+    <!-- Notification Engine -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>SMS & Notification Queue</span>
+        <span class="material-symbols-outlined text-xs">sms</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-xl font-bold text-font-important-light dark:text-font-important-dark font-mono">
+          {{ metrics.notifications.queued }} queued
+        </span>
+      </div>
+      <p class="text-[11px] text-subtle mt-1">{{ metrics.notifications.delivered_24h }} delivered in 24h / {{ metrics.notifications.failed_24h }} failed</p>
+    </div>
+
+    <!-- Database Schema & Migrations -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Schema Migrations</span>
+        <span class="material-symbols-outlined text-xs">schema</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        {% if metrics.migrations.all_applied %}
+          <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">All Applied</span>
+        {% else %}
+          <span class="text-xl font-bold text-amber-600 dark:text-amber-400">{{ metrics.migrations.unapplied_count }} Pending</span>
+        {% endif %}
+      </div>
+      <p class="text-[11px] text-subtle mt-1">Phases 01 through 14 synchronized</p>
+    </div>
+
+    <!-- Local Backups -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Backup Readiness</span>
+        <span class="material-symbols-outlined text-xs">inventory_2</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-xl font-bold text-font-important-light dark:text-font-important-dark font-mono">
+          {{ metrics.storage.backups_count }} archives
+        </span>
+      </div>
+      <p class="text-[11px] text-subtle mt-1">
+        {% if metrics.storage.last_backup.timestamp %}
+          Last: {{ metrics.storage.last_backup.timestamp|date:"M d, H:i" }}
+        {% else %}
+          Status: Ready for configuration
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Pending Approvals & Operational Blockers -->
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-xs overflow-hidden">
+    <div class="px-5 py-4 border-b border-base-200 dark:border-base-800 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Pending Operational Actions & Approvals" %}
+        </h2>
+        <p class="text-xs text-subtle mt-0.5">
+          {% trans "Active workflows awaiting supervisory verification or authorization." %}
+        </p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-base-200 dark:divide-base-800">
+      <div class="p-4 text-center">
+        <span class="text-xs text-subtle">Refund Requests</span>
+        <p class="text-2xl font-bold {% if metrics.approvals.pending_refunds > 0 %}text-amber-600{% else %}text-subtle{% endif %} mt-1 font-mono">
+          {{ metrics.approvals.pending_refunds }}
+        </p>
+      </div>
+      <div class="p-4 text-center">
+        <span class="text-xs text-subtle">Expense Approvals</span>
+        <p class="text-2xl font-bold {% if metrics.approvals.pending_expenses > 0 %}text-amber-600{% else %}text-subtle{% endif %} mt-1 font-mono">
+          {{ metrics.approvals.pending_expenses }}
+        </p>
+      </div>
+      <div class="p-4 text-center">
+        <span class="text-xs text-subtle">Staff Leave Requests</span>
+        <p class="text-2xl font-bold {% if metrics.approvals.pending_leave_requests > 0 %}text-amber-600{% else %}text-subtle{% endif %} mt-1 font-mono">
+          {{ metrics.approvals.pending_leave_requests }}
+        </p>
+      </div>
+      <div class="p-4 text-center">
+        <span class="text-xs text-subtle">Maintenance Work Orders</span>
+        <p class="text-2xl font-bold {% if metrics.approvals.pending_work_orders > 0 %}text-primary-600{% else %}text-subtle{% endif %} mt-1 font-mono">
+          {{ metrics.approvals.pending_work_orders }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operational Links -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <a href="{% url 'backup-readiness' %}" class="p-4 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl hover:border-primary-500 transition shadow-xs flex items-center gap-3">
+      <span class="material-symbols-outlined text-primary-600 text-2xl">backup</span>
+      <div>
+        <h3 class="text-xs font-bold text-font-important-light dark:text-font-important-dark">Backup Readiness</h3>
+        <p class="text-[11px] text-subtle">Review retention rules and disaster recovery</p>
+      </div>
+    </a>
+
+    <a href="{% url 'data-management' %}" class="p-4 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl hover:border-primary-500 transition shadow-xs flex items-center gap-3">
+      <span class="material-symbols-outlined text-primary-600 text-2xl">upload_file</span>
+      <div>
+        <h3 class="text-xs font-bold text-font-important-light dark:text-font-important-dark">Data Import & Export</h3>
+        <p class="text-[11px] text-subtle">Bulk members, products, equipment imports</p>
+      </div>
+    </a>
+
+    <a href="{% url 'operational-reports' %}" class="p-4 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl hover:border-primary-500 transition shadow-xs flex items-center gap-3">
+      <span class="material-symbols-outlined text-primary-600 text-2xl">history</span>
+      <div>
+        <h3 class="text-xs font-bold text-font-important-light dark:text-font-important-dark">Audit Logs & History</h3>
+        <p class="text-[11px] text-subtle">Centralized operational audit trail</p>
+      </div>
+    </a>
+  </div>
+
+</div>
+{% endblock %}

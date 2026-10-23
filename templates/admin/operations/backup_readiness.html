@@ -1,0 +1,203 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">settings_backup_restore</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "PostgreSQL Backup Readiness & Disaster Recovery" %}
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        {% trans "Operational disaster recovery protocol, snapshot verification, storage readiness, and strict offline restore governance." %}
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="{% url 'admin:core_backupconfiguration_changelist' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+        <span class="material-symbols-outlined text-xs">tune</span>
+        {% trans "Configure Backup Policies" %}
+      </a>
+      <a href="" class="p-1.5 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg hover:bg-base-50 dark:hover:bg-base-800 text-subtle transition" title="Refresh">
+        <span class="material-symbols-outlined text-sm">refresh</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Operational Safety Notice -->
+  <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-4 rounded-xl flex items-start gap-3">
+    <span class="material-symbols-outlined text-amber-600 text-lg shrink-0 mt-0.5">security</span>
+    <div class="text-xs text-amber-900 dark:text-amber-200 space-y-1">
+      <p class="font-bold">{% trans "Strict Zero-Browser-Execution Restore Protocol" %}</p>
+      <p>
+        {% trans "In accordance with AGMS Enterprise Security Invariants, database restoration CANNOT and MUST NOT be triggered from the web interface. All restorations require authorized server console access, offline database verification, and explicit cryptographic checksum validation to prevent arbitrary execution or destructive data overwrite." %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Readiness Metric Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Storage Path Status -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Storage Target</span>
+        <span class="material-symbols-outlined text-xs">folder_special</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        {% if report.directory_exists and report.directory_writable %}
+          <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">Ready & Writable</span>
+        {% elif report.directory_exists %}
+          <span class="text-xl font-bold text-amber-600 dark:text-amber-400">Read-Only</span>
+        {% else %}
+          <span class="text-xl font-bold text-rose-600 dark:text-rose-400">Missing Directory</span>
+        {% endif %}
+      </div>
+      <p class="text-[11px] text-subtle mt-1 font-mono truncate" title="{{ config.backup_directory }}">{{ config.backup_directory }}</p>
+    </div>
+
+    <!-- Free Disk Storage -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Storage Headroom</span>
+        <span class="material-symbols-outlined text-xs">hard_drive</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-xl font-bold text-font-important-light dark:text-font-important-dark font-mono">
+          {{ report.free_space_mb }} MB
+        </span>
+      </div>
+      <p class="text-[11px] text-subtle mt-1">Available disk space on backup mount</p>
+    </div>
+
+    <!-- Retention Lifecycle -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Retention Window</span>
+        <span class="material-symbols-outlined text-xs">timelapse</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-xl font-bold text-font-important-light dark:text-font-important-dark font-mono">
+          {{ report.retention_days }} Days
+        </span>
+      </div>
+      <p class="text-[11px] text-subtle mt-1">Compression: {{ report.compression }}</p>
+    </div>
+
+    <!-- Last Backup Status -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 p-4 rounded-xl shadow-xs">
+      <div class="flex items-center justify-between text-subtle text-[10px] font-bold uppercase">
+        <span>Latest Archive</span>
+        <span class="material-symbols-outlined text-xs">history</span>
+      </div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-sm font-bold {% if report.last_backup_status == 'SUCCESS' %}text-emerald-600 dark:text-emerald-400{% else %}text-subtle{% endif %}">
+          {{ report.last_backup_status|default:"NO RECORDED BACKUPS" }}
+        </span>
+      </div>
+      <p class="text-[11px] text-subtle mt-1">
+        {% if report.last_backup_at %}
+          {{ report.last_backup_at|date:"Y-m-d H:i" }}
+        {% else %}
+          Awaiting scheduled cycle
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Backup & Disaster Recovery Architecture -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Configuration Policy Details -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl p-5 shadow-xs">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary-600">policy</span>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Active Backup Configuration" %}
+        </h2>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="flex items-center justify-between pb-2 border-b border-base-100 dark:border-base-800">
+          <span class="text-subtle">Target Storage Type</span>
+          <span class="font-semibold">{{ config.get_storage_type_display }}</span>
+        </div>
+        <div class="flex items-center justify-between pb-2 border-b border-base-100 dark:border-base-800">
+          <span class="text-subtle">Local Target Directory</span>
+          <span class="font-mono text-[11px]">{{ config.backup_directory }}</span>
+        </div>
+        <div class="flex items-center justify-between pb-2 border-b border-base-100 dark:border-base-800">
+          <span class="text-subtle">Offsite Backup Reference</span>
+          <span class="font-mono text-[11px]">{{ config.offsite_target_reference|default:"Not Configured (Optional)" }}</span>
+        </div>
+        <div class="flex items-center justify-between pb-2 border-b border-base-100 dark:border-base-800">
+          <span class="text-subtle">Automated Encryption</span>
+          <span class="font-semibold">
+            {% if config.encrypt_backups %}
+              <span class="text-emerald-600 dark:text-emerald-400">Enabled (AES-256 / GPG)</span>
+            {% else %}
+              <span class="text-amber-600 dark:text-amber-400">Disabled</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="flex items-center justify-between pb-2 border-b border-base-100 dark:border-base-800">
+          <span class="text-subtle">Notification Alerts on Failure</span>
+          <span class="font-semibold">
+            {% if config.notify_on_failure %}
+              <span class="text-emerald-600 dark:text-emerald-400">Enabled (Owner Email/SMS)</span>
+            {% else %}
+              <span class="text-subtle">Disabled</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-subtle">Last Verified Recovery Test</span>
+          <span class="font-semibold">
+            {% if report.last_verified_at %}
+              {{ report.last_verified_at|date:"Y-m-d H:i" }}
+            {% else %}
+              <span class="text-amber-600">Verification Pending</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Authoritative Operational Procedures -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl p-5 shadow-xs">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary-600">terminal</span>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Standard Operating Commands (PostgreSQL)" %}
+        </h2>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <p class="font-semibold text-font-important-light dark:text-font-important-dark mb-1">
+            1. Manual Snapshot Creation:
+          </p>
+          <pre class="bg-base-100 dark:bg-base-950 p-2.5 rounded-lg font-mono text-[11px] text-font-important-light dark:text-font-important-dark overflow-x-auto">pg_dump -h 127.0.0.1 -p 55432 -U postgres -d gym_erp -F c -b -v -f "backups/agms_$(date +%Y%m%d_%H%M%S).dump"</pre>
+        </div>
+
+        <div>
+          <p class="font-semibold text-font-important-light dark:text-font-important-dark mb-1">
+            2. Disaster Recovery Restore Verification (Isolated Test DB):
+          </p>
+          <pre class="bg-base-100 dark:bg-base-950 p-2.5 rounded-lg font-mono text-[11px] text-font-important-light dark:text-font-important-dark overflow-x-auto">createdb -h 127.0.0.1 -p 55432 -U postgres gym_erp_test_restore
+pg_restore -h 127.0.0.1 -p 55432 -U postgres -d gym_erp_test_restore -v "backups/agms_latest.dump"
+dropdb -h 127.0.0.1 -p 55432 -U postgres gym_erp_test_restore</pre>
+        </div>
+
+        <p class="text-[11px] text-subtle italic">
+          {% trans "Scheduled cron or systemd timers execute atomic pg_dump runs and purge archives exceeding the retention threshold." %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

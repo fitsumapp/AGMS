@@ -311,6 +311,15 @@ def can_see_cleaning(request):
     from apps.accounts.roles import has_role
     return has_role(request.user, "Branch Manager")
 
+def owner_or_superuser(request):
+    return request.user.is_authenticated and request.user.is_active and (owner(request) or superuser(request))
+
+def can_manage_operations(request):
+    if not request.user.is_authenticated or not request.user.is_active or not request.user.is_staff:
+        return False
+    from apps.accounts.roles import has_role
+    return owner(request) or superuser(request) or has_role(request.user, "Branch Manager")
+
 def primary_shades():
     rgb = tuple(int(PALETTE["primary"][index:index + 2], 16) for index in (1, 3, 5))
     shades = {}
@@ -464,16 +473,29 @@ def unfold_config():
                 {"title": "Incident Reports", "icon": "emergency", "link": reverse_lazy("admin:facilities_incidentreport_changelist"), "permission": can_see_facilities},
                 {"title": "Facility Reports", "icon": "summarize", "link": reverse_lazy("facility-reports"), "permission": can_see_facilities},
             ]},
-            {"title": "Management", "items": [
-                {"title": "Staff Accounts", "icon": "badge", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner},
-                {"title": "Branch Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:branches_userbranchaccess_changelist"), "permission": owner},
-                {"title": "Gym Branding", "icon": "palette", "link": reverse_lazy("admin:core_gymbranding_changelist"), "permission": owner},
-                {"title": "Security & Audit", "icon": "policy", "link": reverse_lazy("admin:branches_auditevent_changelist"), "permission": owner},
-                {"title": "Technical Users", "icon": "manage_accounts", "link": reverse_lazy("admin:accounts_user_changelist"), "permission": superuser},
+            {"title": "Administration & Settings", "items": [
+                {"title": "Gym Profile", "icon": "domain", "link": reverse_lazy("admin:core_gymprofile_changelist"), "permission": owner_or_superuser},
+                {"title": "Branch Configuration", "icon": "location_city", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings},
+                {"title": "Membership Policies", "icon": "card_membership", "link": reverse_lazy("admin:core_gympolicy_changelist"), "permission": can_see_gym_policies},
+                {"title": "Attendance Settings", "icon": "how_to_reg", "link": reverse_lazy("admin:branches_branchsettings_changelist"), "permission": can_see_branch_settings},
+                {"title": "Billing & Finance Policies", "icon": "receipt_long", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": owner_or_superuser},
+                {"title": "POS & Inventory Settings", "icon": "point_of_sale", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": owner_or_superuser},
+                {"title": "Notification Settings", "icon": "notifications_active", "link": reverse_lazy("admin:notifications_providerconfig_changelist"), "permission": can_see_provider_settings},
+                {"title": "Staff & Class Policies", "icon": "badge", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": owner_or_superuser},
+                {"title": "Facility Policies", "icon": "fitness_center", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": owner_or_superuser},
+                {"title": "Feature Management", "icon": "toggle_on", "link": reverse_lazy("admin:core_featureflag_changelist"), "permission": owner_or_superuser},
+                {"title": "Business User Administration", "icon": "manage_accounts", "link": reverse_lazy("admin:accounts_staffaccount_changelist"), "permission": owner_or_superuser},
+                {"title": "Audit Logs", "icon": "policy", "link": reverse_lazy("admin:branches_auditevent_changelist"), "permission": owner_or_superuser},
+                {"title": "Data Import & Export", "icon": "swap_vertical_circle", "link": reverse_lazy("data-management"), "permission": can_manage_operations},
+                {"title": "System Health", "icon": "health_and_safety", "link": reverse_lazy("system-health"), "permission": can_manage_operations},
+                {"title": "Backup Readiness", "icon": "settings_backup_restore", "link": reverse_lazy("backup-readiness"), "permission": owner_or_superuser},
+                {"title": "Operational Reports", "icon": "summarize", "link": reverse_lazy("operational-reports"), "permission": can_manage_operations},
+            ]},
+            {"title": "Technical Administration", "items": [
+                {"title": "Technical Users", "icon": "engineering", "link": reverse_lazy("admin:accounts_user_changelist"), "permission": superuser},
                 {"title": "Technical Groups", "icon": "admin_panel_settings", "link": reverse_lazy("admin:auth_group_changelist"), "permission": superuser},
-                {"title": "System Settings", "icon": "settings", "link": reverse_lazy("admin:core_gymprofile_changelist"), "permission": superuser},
-                {"title": "Technical Settings", "icon": "tune", "link": reverse_lazy("admin:core_gymsettings_changelist"), "permission": superuser},
-                {"title": "Gym Policies", "icon": "rule", "link": reverse_lazy("admin:core_gympolicy_changelist"), "permission": can_see_gym_policies},
+                {"title": "Gym Branding", "icon": "palette", "link": reverse_lazy("admin:core_gymbranding_changelist"), "permission": owner_or_superuser},
+                {"title": "Branch Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:branches_userbranchaccess_changelist"), "permission": owner_or_superuser},
             ]},
         ]},
     }

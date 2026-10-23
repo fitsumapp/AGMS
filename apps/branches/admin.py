@@ -136,10 +136,47 @@ class UserBranchAccessAdmin(BranchScopedAdmin):
 
 @admin.register(BranchSettings)
 class BranchSettingsAdmin(BranchScopedAdmin):
-    list_display = ("branch", "opens_at", "closes_at")
+    list_display = ("branch", "opens_at", "closes_at", "attendance_qr_enabled", "attendance_manual_enabled")
     search_fields = ("branch__code", "branch__name")
-    fieldsets = (("Operating hours", {"fields": ("branch", "opens_at", "closes_at")}),
-        ("Audit", {"fields": ("created_at", "updated_at", "created_by", "updated_by")}))
+    list_filter = ("attendance_qr_enabled", "attendance_manual_enabled")
+    fieldsets = (
+        ("Operating Schedule", {
+            "fields": ("branch", "operating_days", ("opens_at", "closes_at")),
+        }),
+        ("Attendance & Entry Overrides", {
+            "description": "Configure branch-specific access and verification rules. At least one attendance method must remain active.",
+            "fields": (
+                ("attendance_qr_enabled", "attendance_manual_enabled"),
+                "allow_access_with_balance_override",
+            ),
+        }),
+        ("POS, Retail & Inventory Overrides", {
+            "fields": (
+                "max_discount_percent_override",
+                "low_stock_threshold_override",
+            ),
+        }),
+        ("Facility & Operations Overrides", {
+            "fields": (
+                "locker_deposit_etb_override",
+                "cleaning_inspection_frequency_hours",
+                "sms_enabled_override",
+            ),
+        }),
+        ("Receipt Customization", {
+            "fields": (
+                "receipt_header_override",
+                "receipt_footer_override",
+            ),
+        }),
+        ("Manager Notes", {
+            "fields": ("manager_notes",),
+        }),
+        ("Audit Metadata", {
+            "classes": ("collapse",),
+            "fields": ("created_at", "updated_at", "created_by", "updated_by"),
+        }),
+    )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -177,22 +214,29 @@ class BranchSettingsAdmin(BranchScopedAdmin):
             obj.created_by = request.user
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
-        record_event(request.user, "branch_settings_updated", obj, {"branch_code": obj.branch.code})
+        record_event(request.user, "branch_settings_updated", obj, {"branch_code": obj.branch.code}, branch=obj.branch)
 
 
 @admin.register(AuditEvent)
 class AuditEventAdmin(ModelAdmin):
-    list_display = ("occurred_at", "action", "actor", "target_type", "target_id")
-    list_filter = ("action", "target_type")
-    search_fields = ("action", "target_type", "target_id")
-    readonly_fields = ("id", "occurred_at", "action", "actor", "target_type", "target_id", "metadata")
+    list_display = ("occurred_at", "action", "actor", "branch", "target_type", "target_id")
+    list_filter = ("action", "branch", "target_type")
+    search_fields = ("action", "target_type", "target_id", "actor__email", "branch__name", "branch__code")
+    readonly_fields = ("id", "occurred_at", "action", "actor", "branch", "target_type", "target_id", "metadata")
     def has_module_permission(self, request):
-        return is_owner(request.user)
+        return is_owner(request.user) or has_role(request.user, "Branch Manager")
     def has_view_permission(self, request, obj=None):
-        return is_owner(request.user)
+        return is_owner(request.user) or has_role(request.user, "Branch Manager")
     def has_add_permission(self, request):
         return False
     def has_change_permission(self, request, obj=None):
         return False
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if is_owner(request.user) or request.user.is_superuser:
+            return qs
+        return qs.filter(branch__in=accessible_branches(request.user))
+

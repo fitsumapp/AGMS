@@ -1,0 +1,215 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="px-4 py-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">swap_vertical_circle</span>
+        <h1 class="text-xl font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Operational Data Management (Import & Export)" %}
+        </h1>
+      </div>
+      <p class="text-xs text-subtle mt-0.5">
+        {% trans "Controlled CSV bulk onboarding, duplicate-safe dry-run preview, and branch-scoped export utilities." %}
+      </p>
+    </div>
+
+    <!-- Quick CSV Template Downloads -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-semibold text-subtle">{% trans "Sample Templates:" %}</span>
+      <a href="{% url 'sample-csv-download' 'members' %}" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg text-xs font-medium text-subtle hover:text-font-important-light dark:hover:text-font-important-dark transition">
+        <span class="material-symbols-outlined text-xs">download</span> Members
+      </a>
+      <a href="{% url 'sample-csv-download' 'products' %}" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg text-xs font-medium text-subtle hover:text-font-important-light dark:hover:text-font-important-dark transition">
+        <span class="material-symbols-outlined text-xs">download</span> Products
+      </a>
+      <a href="{% url 'sample-csv-download' 'equipment' %}" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-lg text-xs font-medium text-subtle hover:text-font-important-light dark:hover:text-font-important-dark transition">
+        <span class="material-symbols-outlined text-xs">download</span> Equipment
+      </a>
+    </div>
+  </div>
+
+  <!-- Security and Formula Injection Safeguard Notice -->
+  <div class="bg-primary-50/60 dark:bg-primary-950/20 border border-primary-200 dark:border-primary-900/30 p-4 rounded-xl flex items-start gap-3">
+    <span class="material-symbols-outlined text-primary-600 text-lg shrink-0 mt-0.5">verified_user</span>
+    <div class="text-xs text-font-important-light dark:text-font-important-dark space-y-1">
+      <p class="font-bold">{% trans "Security Invariant: Formula-Injection Sanitization & Atomic Writes" %}</p>
+      <p class="text-subtle">
+        {% trans "All uploaded and exported CSV files undergo rigorous cell-level sanitization against spreadsheet formula injection (=, +, -, @, \\t, \\r). Imports are executed within atomic database transactions with duplicate detection and zero silent data overwriting." %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Import Results Feedback (if applicable) -->
+  {% if import_result %}
+  <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl p-5 shadow-xs space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-base-100 dark:border-base-800">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined {% if import_result.errors %}text-amber-500{% else %}text-emerald-500{% endif %}">analytics</span>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Import Processing Summary" %}
+        </h2>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 font-semibold">
+          {% trans "Created" %}: {{ import_result.created_count }}
+        </span>
+        <span class="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 font-semibold">
+          {% trans "Valid" %}: {{ import_result.valid_count }}
+        </span>
+        <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 font-semibold">
+          {% trans "Duplicates" %}: {{ import_result.duplicates|length }}
+        </span>
+        <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400 font-semibold">
+          {% trans "Errors" %}: {{ import_result.errors|length }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Errors List -->
+    {% if import_result.errors %}
+    <div class="space-y-1.5">
+      <p class="text-xs font-bold text-rose-600 dark:text-rose-400">{% trans "Validation Issues Encountered:" %}</p>
+      <div class="max-h-40 overflow-y-auto bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 rounded-lg p-3 text-xs text-rose-800 dark:text-rose-300 font-mono space-y-1">
+        {% for err in import_result.errors %}
+          <div>Row {{ err.row }}: {{ err.error }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Duplicates List -->
+    {% if import_result.duplicates %}
+    <div class="space-y-1.5">
+      <p class="text-xs font-bold text-amber-600 dark:text-amber-400">{% trans "Duplicate Records Skipped:" %}</p>
+      <div class="max-h-32 overflow-y-auto bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 font-mono space-y-1">
+        {% for dup in import_result.duplicates %}
+          <div>Row {{ dup.row }}: {{ dup.item }} ({{ dup.reason }})</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Two-Column Operational Panels -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- 1. CSV Import Panel -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl p-5 shadow-xs">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary-600">upload_file</span>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Bulk Entity Importer" %}
+        </h2>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="space-y-4">
+        {% csrf_token %}
+
+        <!-- Target Branch -->
+        <div>
+          <label class="block text-xs font-semibold text-subtle mb-1">{% trans "Target Branch" %}</label>
+          <select name="branch_id" class="w-full text-xs bg-white dark:bg-base-950 border border-base-200 dark:border-base-800 rounded-lg p-2.5 focus:border-primary-500 focus:outline-hidden">
+            {% for b in branches %}
+              <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>
+                {{ b.name }} ({{ b.code }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Import Entity Type -->
+        <div>
+          <label class="block text-xs font-semibold text-subtle mb-1">{% trans "Import Entity" %}</label>
+          <select name="import_type" class="w-full text-xs bg-white dark:bg-base-950 border border-base-200 dark:border-base-800 rounded-lg p-2.5 focus:border-primary-500 focus:outline-hidden">
+            <option value="members">{% trans "Members (First Name, Last Name, Phone, Email, Gender, DOB)" %}</option>
+            <option value="products">{% trans "Retail Products (Name, SKU, Category Code, Unit Price, Stock)" %}</option>
+            <option value="equipment">{% trans "Facility Equipment (Asset Code, Name, Category, Area)" %}</option>
+          </select>
+        </div>
+
+        <!-- File Upload -->
+        <div>
+          <label class="block text-xs font-semibold text-subtle mb-1">{% trans "CSV File" %}</label>
+          <input type="file" name="csv_file" accept=".csv" required class="w-full text-xs text-subtle file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-950 dark:file:text-primary-300">
+        </div>
+
+        <!-- Dry Run Checkbox -->
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" name="dry_run" value="true" id="dry_run_check" checked class="w-4 h-4 text-primary-600 rounded border-base-300 focus:ring-primary-500">
+          <label for="dry_run_check" class="text-xs font-medium text-font-important-light dark:text-font-important-dark">
+            {% trans "Validate in Dry-Run Preview Mode (Recommended)" %}
+          </label>
+        </div>
+        <p class="text-[11px] text-subtle pl-6 -mt-2">
+          {% trans "Checks headers, parses rows, detects duplicates, and validates without committing records to the database." %}
+        </p>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-sm">play_circle</span>
+            {% trans "Process CSV Import" %}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 2. CSV Data Export Panel -->
+    <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl p-5 shadow-xs">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary-600">file_download</span>
+        <h2 class="text-sm font-bold text-font-important-light dark:text-font-important-dark">
+          {% trans "Branch Data Export Utility" %}
+        </h2>
+      </div>
+
+      <form method="get" action="{% url 'data-export' %}" class="space-y-4">
+        <!-- Target Branch -->
+        <div>
+          <label class="block text-xs font-semibold text-subtle mb-1">{% trans "Source Branch" %}</label>
+          <select name="branch" class="w-full text-xs bg-white dark:bg-base-950 border border-base-200 dark:border-base-800 rounded-lg p-2.5 focus:border-primary-500 focus:outline-hidden">
+            {% for b in branches %}
+              <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>
+                {{ b.name }} ({{ b.code }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Entity Type -->
+        <div>
+          <label class="block text-xs font-semibold text-subtle mb-1">{% trans "Export Dataset" %}</label>
+          <select name="type" class="w-full text-xs bg-white dark:bg-base-950 border border-base-200 dark:border-base-800 rounded-lg p-2.5 focus:border-primary-500 focus:outline-hidden">
+            <option value="members">{% trans "Active Branch Members & Registration Profiles" %}</option>
+            <option value="products">{% trans "Retail Products & Inventory Valuations" %}</option>
+            <option value="equipment">{% trans "Equipment Registry & Maintenance Records" %}</option>
+          </select>
+        </div>
+
+        <div class="bg-base-50 dark:bg-base-950 border border-base-100 dark:border-base-800 p-3 rounded-lg text-[11px] text-subtle space-y-1">
+          <p class="font-semibold text-font-important-light dark:text-font-important-dark">{% trans "Export Characteristics:" %}</p>
+          <ul class="list-disc pl-4 space-y-0.5">
+            <li>UTF-8 BOM encoding for seamless Microsoft Excel compatibility.</li>
+            <li>Sanitized cells to mitigate client-side formula injection vulnerabilities.</li>
+            <li>Strict isolation: only data belonging to the selected authorized branch is exported.</li>
+          </ul>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-sm">download</span>
+            {% trans "Export Filtered Dataset (CSV)" %}
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

@@ -9,7 +9,15 @@ from apps.analytics.views import (
     report_center_view,
 )
 from apps.branches.views import switch_branch
-from apps.core.views import logo
+from apps.core.views import (
+    logo,
+    system_health_view,
+    backup_readiness_view,
+    data_management_view,
+    data_export_view,
+    sample_csv_download_view,
+    operational_reports_view,
+)
 from apps.members.views import download_member_document, view_member_photo
 from apps.classes.views import class_calendar_view, class_reports_view
 from apps.staff.views import (
@@ -74,5 +82,11 @@ urlpatterns = [
     path("admin/notifications/callbacks/<str:provider_code>/", sms_delivery_callback_view, name="sms-delivery-callback"),
     path("admin/facilities/dashboard/", admin.site.admin_view(facility_dashboard_view), name="facility-dashboard"),
     path("admin/facilities/reports/", admin.site.admin_view(facility_reports_view), name="facility-reports"),
+    path("admin/operations/system-health/", admin.site.admin_view(system_health_view), name="system-health"),
+    path("admin/operations/backup-readiness/", admin.site.admin_view(backup_readiness_view), name="backup-readiness"),
+    path("admin/operations/data-management/", admin.site.admin_view(data_management_view), name="data-management"),
+    path("admin/operations/data-export/", admin.site.admin_view(data_export_view), name="data-export"),
+    path("admin/operations/sample-csv/<str:data_type>/", admin.site.admin_view(sample_csv_download_view), name="sample-csv-download"),
+    path("admin/operations/reports/", admin.site.admin_view(operational_reports_view), name="operational-reports"),
     path("admin/", admin.site.urls),
 ]

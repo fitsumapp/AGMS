@@ -9,7 +9,9 @@ from unfold.admin import ModelAdmin
 def test_all_admins_use_unfold():
     assert {model._meta.label for model in admin.site._registry} == {
         "accounts.User", "accounts.StaffAccount", "auth.Group", "core.GymProfile",
-        "core.GymSettings", "core.GymBranding", "core.GymPolicy", "branches.Branch",
+        "core.GymSettings", "core.GymBranding", "core.GymPolicy",
+        "core.FeatureFlag", "core.BackupConfiguration",
+        "branches.Branch",
         "branches.UserBranchAccess", "branches.BranchSettings", "branches.AuditEvent",
         "members.Member",
         "memberships.MembershipPackage", "memberships.Membership",
