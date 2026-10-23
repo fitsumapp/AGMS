@@ -520,7 +520,9 @@ def approve_refund(actor, refund, approve=True, admin_notes="") -> Refund:
         raise ValidationError(f"Only REQUESTED refunds can be processed. Current status: {ref.status}")
 
     # Separation of duties: requester cannot approve high-risk refund unless Gym Owner
-    if ref.requested_by_id == actor.pk and not is_owner(actor):
+    from apps.core.services import resolve_setting
+    require_approval = resolve_setting(ref.invoice.branch, "require_refund_approval", default=True)
+    if require_approval and ref.requested_by_id == actor.pk and not is_owner(actor):
         raise PermissionDenied("Separation of duties: requester cannot approve their own refund.")
 
     if not approve:
@@ -619,8 +621,9 @@ def trigger_membership_billing_clearance(*, invoice, payment):
     Handles both initial memberships and renewals.
     Respects gym-level allow_access_with_balance policy.
     """
-    settings_obj = GymSettings.objects.first()
-    allow_balance = settings_obj.allow_access_with_balance if settings_obj else False
+    from apps.core.services import resolve_setting
+    target_branch = invoice.branch or (invoice.membership.home_branch if invoice.membership else None)
+    allow_balance = resolve_setting(target_branch, "allow_access_with_balance", default=False)
 
     is_cleared = (invoice.balance_due == Decimal("0.00")) or (allow_balance and invoice.paid_amount > Decimal("0.00"))
 

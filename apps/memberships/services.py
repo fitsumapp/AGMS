@@ -241,6 +241,10 @@ def request_freeze(*, actor, membership, start_date=None, end_date=None, reason=
     if membership.status != Membership.Status.ACTIVE:
         raise ValidationError(f"Only ACTIVE memberships can be frozen. Current status: {membership.status}")
 
+    from apps.core.services import resolve_setting
+    if not resolve_setting(membership.home_branch, "membership_freeze_enabled", default=True):
+        raise ValidationError("Membership freezing is currently disabled by gym policy.")
+
     package = membership.package
     if not package.freeze_allowed:
         raise ValidationError("Freezing is not allowed for this membership package.")

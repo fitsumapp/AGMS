@@ -29,9 +29,14 @@ class SuperuserOnlyMixin:
         return self.has_module_permission(request)
 
 
+from django.db import models
+
 class FoundationAdmin(SuperuserOnlyMixin, ModelAdmin):
     list_per_page = settings.ADMIN_PAGE_SIZE
     readonly_fields = ("created_at", "updated_at", "created_by", "updated_by")
+    formfield_overrides = {
+        models.URLField: {"assume_scheme": "https"},
+    }
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -299,6 +304,9 @@ class GymPolicyAdmin(ModelAdmin):
 
 @admin.register(GymBranding)
 class GymBrandingAdmin(ModelAdmin):
+    formfield_overrides = {
+        models.URLField: {"assume_scheme": "https"},
+    }
     list_display = ("name", "phone", "email", "updated_at")
     fields = (
         "name", "legal_name", "tax_id", "commercial_registration_number",

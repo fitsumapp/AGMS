@@ -102,9 +102,8 @@ def can_access_branch(member, branch, at_datetime=None) -> AccessResult:
 
     # 3. Payment Clearance Check
     if m.payment_clearance_status == Membership.PaymentClearance.PENDING or m.status == Membership.Status.PENDING:
-        from apps.core.models import GymSettings
-        settings_obj = GymSettings.objects.first()
-        allow_balance = settings_obj.allow_access_with_balance if settings_obj else False
+        from apps.core.services import resolve_setting
+        allow_balance = resolve_setting(branch or m.home_branch, "allow_access_with_balance", default=False)
 
         has_verified_payment = False
         if allow_balance:

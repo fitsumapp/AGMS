@@ -201,7 +201,7 @@ class AttendanceAdmin(ModelAdmin):
         user = request.user
         branches = accessible_branches(user)
         selected_branch = active_branch(request) or branches.first()
-        method_settings = get_attendance_method_settings()
+        method_settings = get_attendance_method_settings(selected_branch)
 
         if not method_settings["qr_enabled"]:
             if request.method == "POST":
@@ -278,7 +278,7 @@ class AttendanceAdmin(ModelAdmin):
         user = request.user
         branches = accessible_branches(user)
         selected_branch = active_branch(request) or branches.first()
-        method_settings = get_attendance_method_settings()
+        method_settings = get_attendance_method_settings(selected_branch)
 
         if not method_settings["manual_enabled"]:
             if request.method == "POST":

@@ -27,7 +27,7 @@ def process_check_in(
     Validates QR credential (if provided), member eligibility, visit caps,
     and open-session concurrency before recording attendance.
     """
-    assert_attendance_method_enabled(method)
+    assert_attendance_method_enabled(method, branch=branch)
 
     if actor and actor.is_authenticated and not can_checkin_members(actor, branch):
         raise PermissionDenied("Staff member is not authorized to record attendance for this branch.")
@@ -172,7 +172,7 @@ def process_check_out(
     """
     Complete an active attendance session.
     """
-    assert_attendance_method_enabled(method)
+    assert_attendance_method_enabled(method, branch=branch)
     operator_str = str(actor.email if actor and actor.is_authenticated else "SYSTEM")
 
     if raw_token:
@@ -231,7 +231,7 @@ def record_manual_override(
     if not can_override_checkin(actor, branch):
         raise PermissionDenied("Only Branch Managers or Gym Owners are authorized to grant manual overrides.")
 
-    assert_attendance_method_enabled(Attendance.Method.OVERRIDE)
+    assert_attendance_method_enabled(Attendance.Method.OVERRIDE, branch=branch)
 
     if not override_reason or not override_reason.strip():
         raise ValidationError("A clear override reason is mandatory.")

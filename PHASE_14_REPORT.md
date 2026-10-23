@@ -389,3 +389,66 @@ Real browser UAT was conducted via `browser_subagent` on the local development s
 - [x] Full regression test suite passing (380/380 tests, 100%).
 - [x] Real browser UAT conducted, recorded, and verified.
 - [x] Final Production Deployment NOT initiated.
+
+---
+
+### 26. Final Hardening Audit
+
+Following the initial Phase 14 baseline (`cbd779d0ec0059c381c0065094254bb735391d09`), an exhaustive integration, security, and production-readiness hardening cycle was executed across all ERP modules (Phases 01–14).
+
+#### 26.1 Elimination of Actionable Warnings (100% Resolved)
+- **Deprecation Source Identified:** 4 actionable Django 6.0 deprecation warnings were flagged concerning `models.URLField` formfield transitions (`RemovedInDjango60Warning: The default scheme will change from 'http' to 'https' in Django 6.0`).
+- **Clean Architecture Resolution:** Rather than applying broad setting suppressions or relying on transient configuration flags, overrides were pinned cleanly at model admin declarations using:
+  ```python
+  formfield_overrides = {
+      models.URLField: {"assume_scheme": "https"},
+  }
+  ```
+  applied across `FoundationAdmin` (`apps/core/admin.py`), `GymBrandingAdmin` (`apps/core/admin.py`), and `ProviderConfigAdmin` (`apps/notifications/admin.py`).
+- **Result:** **0 warnings across the entire test suite and server startup.**
+
+#### 26.2 Production Hardening Integration Across Prior Modules
+1. **Attendance Safety Invariant & Feature Precedence:**
+   - `apps/attendance/permissions.py` and `services.py`: Hardened `record_attendance` to resolve branch-level feature flags (`qr_code_attendance_enabled`, `manual_attendance_fallback_enabled`) and setting overrides (`attendance_qr_enabled`, `attendance_manual_enabled`). Enforced safety invariant guaranteeing that if both verification methods are administratively toggled off, manual check-in remains active as an unblockable operational failsafe.
+2. **Membership Payment Clearance & Access Policy:**
+   - `apps/memberships/eligibility.py`: Integrated `resolve_setting(branch or m.home_branch, "allow_access_with_balance", default=False)` into `can_access_branch`, enforcing entry denial for overdue balances unless explicitly permitted by branch policy.
+3. **Point of Sale & Inventory Controls:**
+   - `apps/inventory/services.py`: Enforced `cashier_shift_required` (validating an active `CashierShift` for non-owner cashiers) and capped point-of-sale discounts to `pos_max_discount_percent` before line item calculations.
+4. **Facility & Locker Financial Policies:**
+   - `apps/facilities/services.py`: Hardened locker assignment and key replacement to fall back dynamically to `default_locker_deposit_etb` (500.00 ETB) and `lost_key_penalty_etb` (150.00 ETB) resolved from settings.
+5. **Notification Quiet Hours & Daily Member Caps:**
+   - `apps/notifications/services.py`: Enforced `sms_quiet_hours` (deferring non-critical SMS until quiet hours end) and `max_daily_sms_per_member` (cancelling outbound dispatches exceeding the threshold).
+6. **Data Importer Security & Boundary Protection:**
+   - `apps/core/importers.py`: Added service-level authorization enforcement (`can_manage_branch`, `can_access_branch`), strict field length sanitization (names <= 50, phones <= 20, emails <= 100), intra-batch duplicate detection, and full sanitization against spreadsheet formula injection (`=`, `+`, `-`, `@`, `\t`, `\r`).
+
+#### 26.3 PostgreSQL Disaster Recovery & Isolated Restoration Verification
+- **Automated Verification Harness:** `scripts/verify_backup_disaster_recovery.py` was executed directly against PostgreSQL 18 (port 55432).
+- **Execution Evidence:**
+  - Source database `gym_erp` cataloged with 131 base tables.
+  - Custom compressed PostgreSQL archive created (`pg_dump -F c -b`): `755,534 bytes (737.83 KB)`.
+  - TOC verification validated 1,575 catalog/data entries with valid archive headers.
+  - Isolated verification database `gym_erp_restore_test_isolated` created.
+  - `pg_restore` executed with return code `0`.
+  - Restored schema validated with exactly 131 base tables and 100% identical row counts across core models (`core_gymprofile`, `branches_branch`, `branches_branchsettings`, `core_featureflag`).
+  - Isolated test database dropped cleanly with zero mutation to active development data.
+
+#### 26.4 Hardening Test Suite Expansion
+- Created comprehensive integration test suite `tests/test_phase14_hardening.py` containing 23 deep integration tests covering:
+  - Global vs. branch feature flag precedence and dependency trees.
+  - Multi-branch setting overrides and fallback cascades.
+  - Attendance check-in safety invariants under conflicting settings.
+  - POS cashier shift enforcement and discount ceiling validation.
+  - Locker deposit and lost-key penalty resolution.
+  - SMS notification quiet-hour deferrals and daily throttling.
+  - CSV importer boundary validation, formula injection escaping, and duplicate prevention.
+  - Cross-module workflows 1–10 regression verification.
+- **Test Suite Results:** Expanded from 380 to **403 passing tests** (100% pass rate, 0 warnings, 0 errors, 1,290.39s execution time).
+
+#### 26.5 Live Browser User Acceptance Testing (UAT)
+- Real browser verification conducted against local server `http://127.0.0.1:8000`:
+  - **System Health:** Verified live PostgreSQL 18 connection at 1.41ms latency, 0 queue backlogs, 0 unapplied migrations.
+  - **Backup Readiness:** Verified 39.6 GB storage headroom, 30-day retention policy, zero-browser-restore safety alert, and CLI restore instructions.
+  - **Data Management:** Verified CSV sample downloads, dry-run preview mode, and formula injection sanitization.
+  - **Feature Flags:** Verified toggle registry, category badges, and prerequisite dependency visual indicators.
+  - **Visual Ergonomics:** Verified seamless Unfold theme switching between Light Mode and Dark Mode.
+- **Recorded Session Artifact:** `phase14_hardening_uat_1792797597891.webp`.

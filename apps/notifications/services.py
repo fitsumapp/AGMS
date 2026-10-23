@@ -117,6 +117,34 @@ def create_and_queue_notification(
             campaign=campaign,
         )
 
+    # Check daily sending limit per member
+    if channel == NotificationChannel.SMS and recipient_member:
+        from apps.core.services import resolve_setting
+        max_daily = resolve_setting(branch, "max_daily_sms_per_member", default=5)
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        sent_today = NotificationMessage.objects.filter(
+            recipient_member=recipient_member,
+            channel=NotificationChannel.SMS,
+            created_at__gte=today_start,
+        ).exclude(status=NotificationStatus.CANCELLED).count()
+        if sent_today >= max_daily and priority != NotificationPriority.URGENT:
+            return NotificationMessage.objects.create(
+                branch=branch,
+                recipient_member=recipient_member,
+                recipient_user=recipient_user,
+                recipient_address=clean_address,
+                channel=channel,
+                category=category,
+                priority=priority,
+                subject=subject,
+                body=body,
+                status=NotificationStatus.CANCELLED,
+                error_message=f"Daily SMS limit of {max_daily} messages reached for this member.",
+                idempotency_key=idempotency_key,
+                sender=sender,
+                campaign=campaign,
+            )
+
     # Segment and cost calculation
     segments_info = calculate_sms_segments(body)
     segment_count = segments_info["segment_count"] if channel == NotificationChannel.SMS else 1
@@ -151,7 +179,6 @@ def create_and_queue_notification(
         campaign=campaign,
     )
 
-    # Enqueue
     priority_map = {
         NotificationPriority.URGENT: 10,
         NotificationPriority.HIGH: 25,
@@ -160,6 +187,26 @@ def create_and_queue_notification(
     }
     q_priority = priority_map.get(priority, 50)
     queue_scheduled = scheduled_at or timezone.now()
+
+    # Enforce quiet hours for non-urgent SMS notifications
+    if channel == NotificationChannel.SMS and priority != NotificationPriority.URGENT:
+        from apps.core.services import resolve_setting
+        quiet_start = resolve_setting(branch, "sms_quiet_hours_start", default=None)
+        quiet_end = resolve_setting(branch, "sms_quiet_hours_end", default=None)
+        if quiet_start and quiet_end:
+            local_now = timezone.localtime(queue_scheduled)
+            current_t = local_now.time()
+            in_quiet_hours = False
+            if quiet_start <= quiet_end:
+                in_quiet_hours = quiet_start <= current_t <= quiet_end
+            else:
+                in_quiet_hours = current_t >= quiet_start or current_t <= quiet_end
+
+            if in_quiet_hours:
+                target_date = local_now.date() if current_t <= quiet_end else (local_now.date() + timedelta(days=1))
+                deferred_dt = timezone.make_aware(timezone.datetime.combine(target_date, quiet_end))
+                queue_scheduled = deferred_dt
+                send_immediately = False
 
     queue_item = DeliveryQueueItem.objects.create(
         notification=message,

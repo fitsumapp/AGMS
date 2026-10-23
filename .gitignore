@@ -12,3 +12,5 @@ media/*
 staticfiles/
 .local/
 artifacts/
+backups/
+*.dump

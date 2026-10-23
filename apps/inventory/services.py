@@ -946,6 +946,22 @@ def process_pos_checkout(
             subtotal += line_gross
             total_tax += line_tax
 
+        from apps.core.services import resolve_setting
+        shift_required = resolve_setting(branch, "cashier_shift_required", default=False)
+        if shift_required and not shift:
+            open_shift = CashierShift.objects.filter(branch=branch, cashier=actor, status=CashierShift.Status.OPEN).first()
+            if not open_shift and not is_owner(actor):
+                raise ValidationError(_("An active open cashier shift is required to perform POS checkout."))
+            shift = open_shift
+
+        if discount > Decimal("0.00") and subtotal > Decimal("0.00"):
+            max_disc_pct = resolve_setting(branch, "pos_max_discount_percent", default=Decimal("20.00"))
+            discount_pct = (discount / subtotal) * Decimal("100.00")
+            if discount_pct > max_disc_pct and not (is_owner(discount_authorizer or actor)):
+                raise ValidationError(
+                    _(f"Discount of {discount_pct:.1f}% exceeds maximum allowed limit of {max_disc_pct}%.")
+                )
+
         total_due = max(Decimal("0.00"), subtotal - discount)
 
         # Validate payments

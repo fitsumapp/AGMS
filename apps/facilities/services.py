@@ -104,7 +104,12 @@ def assign_locker(
         fee = charged_fee_etb if charged_fee_etb is not None else (
             locked_locker.monthly_fee_etb if assignment_type == LockerAssignment.AssignmentType.MONTHLY else locked_locker.daily_fee_etb
         )
-        deposit = deposit_amount_etb if deposit_amount_etb is not None else locked_locker.deposit_amount_etb
+        from apps.core.services import resolve_setting
+        deposit = deposit_amount_etb if deposit_amount_etb is not None else (
+            locked_locker.deposit_amount_etb if (locked_locker.deposit_amount_etb and locked_locker.deposit_amount_etb > Decimal("0.00")) else (
+                resolve_setting(branch, "default_locker_deposit_etb", default=Decimal("200.00"))
+            )
+        )
 
         asg_number = generate_facility_code(f"LCK-{branch.code}")
 
@@ -364,6 +369,10 @@ def record_locker_incident(
     branch = locker.branch
     if not can_assign_locker(actor, branch):
         raise PermissionDenied(_("You do not have permission to record locker incidents."))
+
+    if incident_type == LockerIncident.IncidentType.LOST_KEY and penalty_fee_etb == Decimal("0.00"):
+        from apps.core.services import resolve_setting
+        penalty_fee_etb = resolve_setting(branch, "lost_key_penalty_etb", default=Decimal("150.00"))
 
     if forfeit_deposit and assignment:
         unforfeited = max(Decimal("0.00"), assignment.deposit_charged_etb - assignment.deposit_refunded_etb)

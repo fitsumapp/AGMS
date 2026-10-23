@@ -134,9 +134,13 @@ def assign_trainer_to_member(
             status=TrainerMemberAssignment.AssignmentStatus.ACTIVE,
         ).count()
 
-        if active_clients_count >= locked_trainer.max_active_clients:
+        from apps.core.services import resolve_setting
+        effective_capacity = resolve_setting(branch, "trainer_max_active_clients", default=locked_trainer.max_active_clients)
+        effective_max = min(locked_trainer.max_active_clients, effective_capacity) if locked_trainer.max_active_clients else effective_capacity
+
+        if active_clients_count >= effective_max:
             raise ValidationError(
-                {"trainer": f"Trainer {locked_trainer.full_name} has reached maximum client capacity ({locked_trainer.max_active_clients})."}
+                {"trainer": f"Trainer {locked_trainer.full_name} has reached maximum client capacity ({effective_max})."}
             )
 
         # Prevent duplicate active assignment

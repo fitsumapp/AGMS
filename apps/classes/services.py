@@ -35,9 +35,8 @@ def get_member_eligible_membership(member, target_date=None, target_branch=None)
         .order_by("-end_date")
     )
 
-    from apps.core.models import GymSettings
-    settings_obj = GymSettings.objects.first()
-    allow_balance = settings_obj.allow_access_with_balance if settings_obj else False
+    from apps.core.services import resolve_setting
+    allow_balance = resolve_setting(target_branch, "allow_access_with_balance", default=False)
 
     for ms in memberships:
         # Check freeze
@@ -96,6 +95,12 @@ def book_class_session(actor, session, member):
         raise ValidationError({"session": f"Bookings for this class open on {session.booking_opens_at.strftime('%Y-%m-%d %H:%M')}."})
     if session.booking_closes_at and now > session.booking_closes_at:
         raise ValidationError({"session": "Bookings for this class are closed."})
+
+    # Enforce advance booking window policy
+    from apps.core.services import resolve_setting
+    booking_window_days = resolve_setting(session.branch, "class_booking_window_days", default=7)
+    if (session.session_date - timezone.localdate()).days > booking_window_days:
+        raise ValidationError({"session": f"Class bookings are only permitted up to {booking_window_days} days in advance."})
 
     # Validate membership eligibility
     eligible_membership = get_member_eligible_membership(
@@ -242,6 +247,14 @@ def cancel_class_booking(actor, booking, reason=""):
 
         if locked_booking.status == ClassBooking.BookingStatus.CANCELLED:
             raise ValidationError({"booking": "This booking has already been cancelled."})
+
+        # Enforce cancellation cutoff window (unless authorized manager or owner)
+        from apps.core.services import resolve_setting
+        cutoff_hours = resolve_setting(locked_session.branch, "class_cancellation_cutoff_hours", default=2)
+        session_start = timezone.make_aware(datetime.combine(locked_session.session_date, locked_session.start_time))
+        if timezone.now() > (session_start - timedelta(hours=cutoff_hours)):
+            if not (is_owner(actor) or has_role(actor, "Branch Manager")):
+                raise ValidationError({"booking": f"Class cancellations must be made at least {cutoff_hours} hours prior to class start."})
 
         original_status = locked_booking.status
 

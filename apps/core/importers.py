@@ -3,13 +3,15 @@ from decimal import Decimal
 import io
 import logging
 from typing import Optional, Any, Dict, List, Tuple
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.accounts.roles import is_owner
 from apps.branches.models import Branch
+from apps.branches.services import can_access_branch, can_manage_branch
 from apps.branches.audit import record_event
 from apps.members.models import Member
 from apps.inventory.models import (
@@ -92,11 +94,15 @@ def import_members(
     and dry-run preview support.
     Expected headers: first_name, last_name, phone, email (optional), gender (optional), date_of_birth (optional)
     """
+    if not (is_owner(actor) or can_manage_branch(actor, branch)):
+        raise PermissionDenied("You do not have permission to import members for this branch.")
+
     rows = parse_csv_input(file_obj)
     created_count = 0
     errors = []
     duplicates = []
     valid_members = []
+    seen_phones = set()
 
     for line_num, data in rows:
         fn = data.get("first_name", "")
@@ -110,10 +116,15 @@ def import_members(
             errors.append(f"Line {line_num}: Missing required fields (first_name, last_name, phone).")
             continue
 
-        # Check existing duplicate phone
-        if Member.objects.filter(phone=phone).exists():
+        if len(fn) > 50 or len(ln) > 50 or len(phone) > 20 or len(email) > 100:
+            errors.append(f"Line {line_num}: Field value exceeds maximum character limit.")
+            continue
+
+        # Check intra-batch and existing duplicate phone
+        if phone in seen_phones or Member.objects.filter(phone=phone).exists():
             duplicates.append(f"Line {line_num}: Member with phone '{phone}' already exists.")
             continue
+        seen_phones.add(phone)
 
         dob = None
         if dob_str:
@@ -183,11 +194,15 @@ def import_products(
     Import retail product catalog from CSV.
     Expected headers: name, sku, category_code, unit_price_etb, initial_stock (optional)
     """
+    if not (is_owner(actor) or can_manage_branch(actor, branch)):
+        raise PermissionDenied("You do not have permission to import products for this branch.")
+
     rows = parse_csv_input(file_obj)
     created_count = 0
     errors = []
     duplicates = []
     valid_products = []
+    seen_skus = set()
 
     for line_num, data in rows:
         name = data.get("name", "")
@@ -200,9 +215,14 @@ def import_products(
             errors.append(f"Line {line_num}: Missing required fields (name, sku, category_code).")
             continue
 
-        if Product.objects.filter(sku=sku).exists():
+        if len(name) > 150 or len(sku) > 50 or len(cat_code) > 50:
+            errors.append(f"Line {line_num}: Field value exceeds maximum character limit.")
+            continue
+
+        if sku in seen_skus or Product.objects.filter(sku=sku).exists():
             duplicates.append(f"Line {line_num}: Product with SKU '{sku}' already exists.")
             continue
+        seen_skus.add(sku)
 
         category = ProductCategory.objects.filter(code=cat_code).first()
         if not category:
@@ -289,11 +309,15 @@ def import_equipment(
     Import heavy gym machinery and equipment assets from CSV.
     Expected headers: asset_code, name, category_code, area_code (optional), manufacturer, model_number
     """
+    if not (is_owner(actor) or can_manage_branch(actor, branch)):
+        raise PermissionDenied("You do not have permission to import equipment for this branch.")
+
     rows = parse_csv_input(file_obj)
     created_count = 0
     errors = []
     duplicates = []
     valid_equipment = []
+    seen_codes = set()
 
     for line_num, data in rows:
         code = data.get("asset_code", "").upper()
@@ -307,9 +331,14 @@ def import_equipment(
             errors.append(f"Line {line_num}: Missing required fields (asset_code, name, category_code).")
             continue
 
-        if Equipment.objects.filter(asset_code=code).exists():
+        if len(code) > 50 or len(name) > 150 or len(cat_code) > 50:
+            errors.append(f"Line {line_num}: Field value exceeds maximum character limit.")
+            continue
+
+        if code in seen_codes or Equipment.objects.filter(asset_code=code).exists():
             duplicates.append(f"Line {line_num}: Asset code '{code}' already exists.")
             continue
+        seen_codes.add(code)
 
         category = EquipmentCategory.objects.filter(code=cat_code).first()
         if not category:
@@ -381,6 +410,9 @@ def export_branch_data(
     """
     Export branch-specific data as CSV with formula-injection sanitization.
     """
+    if not (is_owner(actor) or can_access_branch(actor, branch)):
+        raise PermissionDenied("You do not have permission to export data for this branch.")
+
     filename = f"agms_{branch.code.lower()}_{data_type}_{timezone.now().strftime('%Y%m%d%H%M')}.csv"
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'

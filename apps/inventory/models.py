@@ -225,8 +225,16 @@ class StockItem(UUIDTimeStampedModel):
         return f"{self.product.name} @ {self.branch.name}: {self.quantity_on_hand} {self.product.unit_of_measurement}"
 
     @property
+    def effective_low_stock_threshold(self):
+        from apps.core.services import resolve_setting
+        branch_override = resolve_setting(self.branch, "low_stock_threshold", default=None)
+        if branch_override is not None:
+            return branch_override
+        return self.product.low_stock_threshold
+
+    @property
     def is_low_stock(self):
-        return self.quantity_on_hand <= self.product.low_stock_threshold
+        return self.quantity_on_hand <= self.effective_low_stock_threshold
 
     @property
     def total_inventory_value(self):

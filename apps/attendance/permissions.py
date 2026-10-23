@@ -54,22 +54,38 @@ def can_view_attendance_reports(user, branch=None) -> bool:
     return False
 
 
-def get_attendance_method_settings() -> dict:
+def get_attendance_method_settings(branch=None) -> dict:
     """
-    Retrieve the effective gym-wide attendance method configuration.
+    Retrieve effective attendance method configuration for a branch or globally.
+    Integrates:
+    - Feature Flags: ATTENDANCE_QR, ATTENDANCE_MANUAL
+    - Settings Precedence: BranchSettings -> GymSettings -> True
+    - Safety Invariant: At least one attendance method MUST remain effectively enabled.
     Returns {"qr_enabled": bool, "manual_enabled": bool}.
     """
-    from apps.core.models import GymSettings
-    settings_obj = GymSettings.objects.first()
-    if not settings_obj:
-        return {"qr_enabled": True, "manual_enabled": True}
+    from apps.core.services import is_feature_enabled, resolve_setting
+
+    qr_flag = is_feature_enabled("ATTENDANCE_QR", branch)
+    manual_flag = is_feature_enabled("ATTENDANCE_MANUAL", branch)
+
+    qr_setting = resolve_setting(branch, "attendance_qr_enabled", default=True)
+    manual_setting = resolve_setting(branch, "attendance_manual_enabled", default=True)
+
+    effective_qr = bool(qr_flag and qr_setting)
+    effective_manual = bool(manual_flag and manual_setting)
+
+    # Safety Invariant: At least one method must remain active.
+    # If both would be disabled by configuration or feature flags, fallback to manual (Name/Phone).
+    if not effective_qr and not effective_manual:
+        effective_manual = True
+
     return {
-        "qr_enabled": bool(settings_obj.attendance_qr_enabled),
-        "manual_enabled": bool(settings_obj.attendance_manual_enabled),
+        "qr_enabled": effective_qr,
+        "manual_enabled": effective_manual,
     }
 
 
-def assert_attendance_method_enabled(method: str):
+def assert_attendance_method_enabled(method: str, branch=None):
     """
     Enforce server-side that the requested attendance method is currently enabled.
     Raises ValidationError if disabled.
@@ -77,7 +93,7 @@ def assert_attendance_method_enabled(method: str):
     from django.core.exceptions import ValidationError
     from .models import Attendance
 
-    config = get_attendance_method_settings()
+    config = get_attendance_method_settings(branch)
     method_str = (method or "").upper()
 
     if method_str in (Attendance.Method.QR, Attendance.CheckoutMethod.QR, "QR", "QR_CODE"):

@@ -218,17 +218,24 @@ def is_feature_enabled(code: str, branch: Optional[Branch] = None) -> bool:
     """
     Check if a feature flag is enabled.
     Resolution:
-    1. Branch-scoped flag (if exists)
-    2. Global flag (branch is null)
-    3. Check required dependency flags
+    1. Mandatory global restriction: If globally disabled by owner, branch cannot override.
+    2. Branch-scoped flag (if exists)
+    3. Global flag (branch is null)
+    4. Check required dependency flags recursively
     """
     code = code.strip().upper()
+    global_flag = FeatureFlag.objects.filter(code=code, branch__isnull=True).first()
+
+    # Mandatory global restriction: If globally disabled, branch cannot override to enabled
+    if global_flag and not global_flag.is_enabled:
+        return False
+
     flag = None
     if branch:
         flag = FeatureFlag.objects.filter(code=code, branch=branch).first()
 
     if not flag:
-        flag = FeatureFlag.objects.filter(code=code, branch__isnull=True).first()
+        flag = global_flag
 
     if not flag:
         if FeatureFlag.objects.filter(code=code).exists():
@@ -238,7 +245,7 @@ def is_feature_enabled(code: str, branch: Optional[Branch] = None) -> bool:
     if not flag.is_enabled:
         return False
 
-    # Check dependency tree
+    # Check dependency tree recursively
     if flag.requires_features:
         for req_code in flag.requires_features:
             if not is_feature_enabled(req_code, branch):

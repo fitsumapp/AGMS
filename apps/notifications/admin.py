@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import models
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 
@@ -22,6 +23,9 @@ class ProviderConfigAdmin(ModelAdmin):
     list_display = ("name", "provider_type", "branch", "sender_id", "cost_per_sms_etb", "is_default", "is_active")
     list_filter = ("provider_type", "is_active", "is_default", "branch")
     search_fields = ("name", "sender_id", "api_url")
+    formfield_overrides = {
+        models.URLField: {"assume_scheme": "https"},
+    }
     readonly_fields = ("created_at", "updated_at")
 
     def has_module_permission(self, request):
