@@ -823,7 +823,7 @@ def test_staff_termination_workflow_and_access_revocation(client, branches, staf
         trainer=trainer,
         member=sample_member,
         branch=b1,
-        session_date=date(2026, 10, 25),
+        session_date=timezone.localdate() + timedelta(days=5),
         start_time=time(10, 0),
         end_time=time(11, 0),
         status=TrainingSession.SessionStatus.SCHEDULED,
@@ -833,7 +833,7 @@ def test_staff_termination_workflow_and_access_revocation(client, branches, staf
     future_shift = StaffShift.objects.create(
         staff=staff,
         branch=b1,
-        date=date(2026, 10, 26),
+        date=timezone.localdate() + timedelta(days=2),
         start_time=time(8, 0),
         end_time=time(16, 0),
         status=StaffShift.ShiftStatus.SCHEDULED,

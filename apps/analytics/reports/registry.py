@@ -61,7 +61,7 @@ def extract_payment_collections(branch_qs, date_range: DateFilterRange) -> List[
             "member": f"{member_name} ({member_num})",
             "branch": p.branch.name if p.branch else "N/A",
             "method": p.payment_method.name if p.payment_method else "N/A",
-            "reference": p.reference_number or "-",
+            "reference": (getattr(p, "transaction_reference", None) or getattr(p, "reference_number", None) or "-"),
             "amount": p.amount,
             "verified_by": p.verified_by.email if p.verified_by else "System",
         })

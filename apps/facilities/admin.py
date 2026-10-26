@@ -186,7 +186,7 @@ class EquipmentCategoryAdmin(ModelAdmin):
 
     @display(description=_("Assets Registered"))
     def equipment_count(self, obj):
-        return obj.equipment_items.count()
+        return obj.equipment.count()
 
 
 @admin.register(FacilityArea)
