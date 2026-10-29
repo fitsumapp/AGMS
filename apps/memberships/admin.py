@@ -60,6 +60,30 @@ class MembershipPackageAdmin(ModelAdmin):
     search_fields = ("code", "name", "description")
     inlines = [PackageBranchInline]
 
+    fieldsets = (
+        ("Package Identity", {
+            "description": "Unique plan code, commercial name, and member-facing description.",
+            "fields": (
+                ("code", "name"),
+                "description",
+            ),
+        }),
+        ("Duration & Pricing", {
+            "description": "Subscription length, recurring billing unit, and price in local ETB currency.",
+            "fields": (
+                ("duration_value", "duration_unit"),
+                ("price", "currency"),
+            ),
+        }),
+        ("Access & Freeze Policies", {
+            "description": "Multi-branch facility access rules and suspension / freeze allowances.",
+            "fields": (
+                ("cross_branch_enabled", "freeze_allowed"),
+                ("max_freeze_days", "is_active"),
+            ),
+        }),
+    )
+
     @display(description="Duration")
     def duration_display(self, obj):
         return f"{obj.duration_value} {obj.get_duration_unit_display()}"
@@ -210,6 +234,41 @@ class MembershipAdmin(ModelAdmin):
         "updated_by",
         "created_at",
         "updated_at",
+    )
+
+    fieldsets = (
+        ("Subscription Summary", {
+            "description": "Agreement identifiers, assigned member profile, and package tier.",
+            "fields": (
+                ("membership_number", "home_branch"),
+                ("member", "package"),
+                ("status", "payment_clearance_status"),
+            ),
+        }),
+        ("Validity & Terms", {
+            "description": "Subscription start/end dates, visit allowances, and historical price snapshot.",
+            "fields": (
+                ("start_date", "end_date"),
+                ("price_snapshot", "allowed_visits_snapshot"),
+                ("duration_value_snapshot", "duration_unit_snapshot"),
+                "cross_branch_snapshot",
+            ),
+        }),
+        ("Lifecycle & Cancellation", {
+            "description": "Activation timestamps and cancellation records.",
+            "fields": (
+                ("activation_status", "activated_at"),
+                ("cancelled_at", "cancellation_reason"),
+            ),
+        }),
+        ("Audit Metadata", {
+            "classes": ("collapse",),
+            "description": "Creation and last modification tracking.",
+            "fields": (
+                ("created_at", "updated_at"),
+                ("created_by", "updated_by"),
+            ),
+        }),
     )
 
     def get_queryset(self, request):

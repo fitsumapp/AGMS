@@ -144,34 +144,67 @@ class MemberAdmin(ModelAdmin):
         MemberStatusHistoryInline,
     ]
 
-    fieldsets = (
+    add_fieldsets = (
         ("Personal Information", {
+            "description": "Enter the member's legal name, demographic details, and profile photo.",
             "fields": (
                 "photo",
                 ("first_name", "middle_name", "last_name"),
                 ("gender", "date_of_birth"),
-            )
+            ),
         }),
         ("Contact Information", {
+            "description": "Primary Ethiopian mobile number (+251), alternate contact, and residential address.",
             "fields": (
                 ("phone", "alternative_phone"),
                 "email",
                 ("address", "city"),
-            )
+            ),
         }),
         ("Gym Registration", {
+            "description": "Home branch assignment, membership acquisition channel, and duplicate checking.",
             "fields": (
-                "member_number",
-                "qr_badge_button",
                 "home_branch",
-                "status",
-                "joined_at",
                 ("registration_source", "referral_source"),
-            )
+                "confirm_possible_duplicate",
+            ),
+        }),
+    )
+
+    fieldsets = (
+        ("Personal Information", {
+            "description": "Member's legal identity, gender, date of birth, and photo profile.",
+            "fields": (
+                "photo",
+                ("first_name", "middle_name", "last_name"),
+                ("gender", "date_of_birth"),
+            ),
+        }),
+        ("Contact Information", {
+            "description": "Contact details and physical residence.",
+            "fields": (
+                ("phone", "alternative_phone"),
+                "email",
+                ("address", "city"),
+            ),
+        }),
+        ("Gym Registration", {
+            "description": "Assigned home branch, digital QR access token, status, and join date.",
+            "fields": (
+                ("member_number", "home_branch"),
+                ("status", "joined_at"),
+                "qr_badge_button",
+                ("registration_source", "referral_source"),
+            ),
         }),
     )
 
     readonly_fields = ("member_number", "joined_at", "qr_badge_button")
+
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            return self.add_fieldsets
+        return super().get_fieldsets(request, obj)
 
     def get_form(self, request, obj=None, **kwargs):
         if obj is None:

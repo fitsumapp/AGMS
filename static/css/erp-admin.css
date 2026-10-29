@@ -21,6 +21,34 @@
   --erp-teal-hover: #115e59;
   --erp-focus-ring: rgba(15, 118, 110, 0.35);
   --erp-touch-target: 44px;
+
+  /* Global Form Tokens */
+  --erp-form-max-width: 1140px;
+  --erp-form-bg: #ffffff;
+  --erp-form-border: #e2e8f0;
+  --erp-form-radius: 12px;
+  --erp-form-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --erp-form-header-bg: #f8fafc;
+
+  --erp-input-height: 42px;
+  --erp-input-bg: #ffffff;
+  --erp-input-border: #cbd5e1;
+  --erp-input-border-hover: #94a3b8;
+  --erp-input-focus-border: #0f766e;
+  --erp-input-focus-ring: rgba(15, 118, 110, 0.20);
+  --erp-input-radius: 8px;
+  --erp-input-font-size: 14px;
+
+  --erp-label-color: #0f172a;
+  --erp-label-muted: #64748b;
+  --erp-label-weight: 600;
+
+  --erp-error-color: #dc2626;
+  --erp-error-bg: #fef2f2;
+  --erp-error-border: #fca5a5;
+
+  --erp-section-gap: 24px;
+  --erp-field-gap: 16px;
 }
 
 html.dark {
@@ -33,6 +61,25 @@ html.dark {
   --erp-teal-light: rgba(45, 212, 191, 0.14);
   --erp-teal-hover: #14b8a6;
   --erp-focus-ring: rgba(45, 212, 191, 0.4);
+
+  /* Global Form Dark Tokens */
+  --erp-form-bg: #1e293b;
+  --erp-form-border: #334155;
+  --erp-form-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --erp-form-header-bg: rgba(255, 255, 255, 0.03);
+
+  --erp-input-bg: #0f172a;
+  --erp-input-border: #475569;
+  --erp-input-border-hover: #64748b;
+  --erp-input-focus-border: #2dd4bf;
+  --erp-input-focus-ring: rgba(45, 212, 191, 0.25);
+
+  --erp-label-color: #f1f5f9;
+  --erp-label-muted: #94a3b8;
+
+  --erp-error-color: #f87171;
+  --erp-error-bg: rgba(220, 38, 38, 0.15);
+  --erp-error-border: rgba(248, 113, 113, 0.35);
 }
 
 /* Prevent horizontal page blowouts on all screen sizes */
@@ -993,3 +1040,559 @@ body.overflow-hidden {
     max-width: 90px;
   }
 }
+
+/* ==========================================================================
+   8. AGMS Global Enterprise Form Design System (Step 04B)
+   Standardizing ModelAdmin Forms, Inlines, Custom Forms, and Action Bars
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   8.1 Form Containers & Max-Width Centering
+   -------------------------------------------------------------------------- */
+.change-form #content-main,
+.change-form form,
+.erp-form-container {
+  max-width: var(--erp-form-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Allow wide tables / POS / data management to utilize full container */
+.change-form.erp-form-wide #content-main,
+.change-form.erp-form-wide form,
+.erp-form-container-wide {
+  max-width: 100% !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.2 Section Cards & Fieldset Elevation (Phase D)
+   -------------------------------------------------------------------------- */
+.change-form fieldset.module,
+.change-form .inline-group {
+  background: var(--erp-form-bg) !important;
+  border: 1px solid var(--erp-form-border) !important;
+  border-radius: var(--erp-form-radius) !important;
+  box-shadow: var(--erp-form-shadow) !important;
+  margin-bottom: var(--erp-section-gap) !important;
+  overflow: hidden !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Fieldset and Inline Headings */
+.change-form fieldset.module > h2,
+.change-form fieldset.module > details > summary h2,
+.change-form .inline-group > h2,
+.change-form .inline-heading {
+  background: var(--erp-form-header-bg) !important;
+  border-bottom: 1px solid var(--erp-form-border) !important;
+  color: var(--erp-text) !important;
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  padding: 13px 20px !important;
+  margin: 0 !important;
+  border-radius: var(--erp-form-radius) var(--erp-form-radius) 0 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  letter-spacing: -0.01em !important;
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+}
+
+/* Section descriptions */
+.change-form fieldset.module .text-subtle,
+.change-form .inline-group .text-subtle {
+  color: var(--erp-muted) !important;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+  padding: 10px 20px 0 !important;
+}
+
+/* Internal fieldset padding */
+.change-form fieldset.module > div:not(.bg-base-50) {
+  padding: 18px 20px !important;
+}
+
+/* Collapsible sections styling */
+.change-form fieldset.module details > summary {
+  cursor: pointer;
+  outline: none;
+  list-style: none;
+}
+
+.change-form fieldset.module details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   8.3 Standardized Form Controls (Phase B & C)
+   -------------------------------------------------------------------------- */
+.change-form input[type="text"]:not([class*="unfold-"]),
+.change-form input[type="password"],
+.change-form input[type="email"],
+.change-form input[type="url"],
+.change-form input[type="number"],
+.change-form input[type="tel"],
+.change-form input[type="date"],
+.change-form input[type="datetime-local"],
+.change-form input[type="time"],
+.change-form select,
+.erp-panel input[type="text"],
+.erp-panel input[type="password"],
+.erp-panel input[type="email"],
+.erp-panel input[type="number"],
+.erp-panel input[type="tel"],
+.erp-panel input[type="date"],
+.erp-panel select,
+.erp-form-input,
+.erp-form-select {
+  height: var(--erp-input-height) !important;
+  min-height: var(--erp-input-height) !important;
+  border-radius: var(--erp-input-radius) !important;
+  border: 1px solid var(--erp-input-border) !important;
+  background-color: var(--erp-input-bg) !important;
+  color: var(--erp-text) !important;
+  font-size: var(--erp-input-font-size) !important;
+  padding: 8px 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+
+.change-form textarea,
+.erp-panel textarea,
+.erp-form-textarea {
+  min-height: 90px !important;
+  border-radius: var(--erp-input-radius) !important;
+  border: 1px solid var(--erp-input-border) !important;
+  background-color: var(--erp-input-bg) !important;
+  color: var(--erp-text) !important;
+  font-size: var(--erp-input-font-size) !important;
+  padding: 10px 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  line-height: 1.5 !important;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+
+/* Hover and Focus States */
+.change-form input:hover,
+.change-form select:hover,
+.change-form textarea:hover,
+.erp-panel input:hover,
+.erp-panel select:hover,
+.erp-panel textarea:hover,
+.erp-form-input:hover,
+.erp-form-select:hover,
+.erp-form-textarea:hover {
+  border-color: var(--erp-input-border-hover) !important;
+}
+
+.change-form input:focus,
+.change-form select:focus,
+.change-form textarea:focus,
+.erp-panel input:focus,
+.erp-panel select:focus,
+.erp-panel textarea:focus,
+.erp-form-input:focus,
+.erp-form-select:focus,
+.erp-form-textarea:focus {
+  outline: none !important;
+  border-color: var(--erp-input-focus-border) !important;
+  box-shadow: 0 0 0 3px var(--erp-input-focus-ring) !important;
+}
+
+/* Checkbox and Radio controls */
+.change-form input[type="checkbox"],
+.change-form input[type="radio"],
+.erp-panel input[type="checkbox"],
+.erp-panel input[type="radio"],
+.erp-form-checkbox {
+  width: 18px !important;
+  height: 18px !important;
+  accent-color: var(--erp-teal) !important;
+  cursor: pointer !important;
+  vertical-align: middle !important;
+  border-radius: 4px !important;
+}
+
+/* Duplicate profile safety confirmation highlight */
+.erp-duplicate-warning-checkbox {
+  width: 20px !important;
+  height: 20px !important;
+  accent-color: #d97706 !important;
+  outline: 2px solid rgba(217, 119, 6, 0.3) !important;
+}
+
+/* File Upload Controls */
+.change-form input[type="file"],
+.erp-panel input[type="file"],
+.erp-form-file {
+  width: 100% !important;
+  font-size: 13px !important;
+  color: var(--erp-muted) !important;
+  padding: 6px 0 !important;
+}
+
+.change-form input[type="file"]::file-selector-button,
+.erp-panel input[type="file"]::file-selector-button,
+.erp-form-file::file-selector-button {
+  background: var(--erp-teal-light) !important;
+  color: var(--erp-teal) !important;
+  border: 1px solid rgba(15, 118, 110, 0.25) !important;
+  border-radius: 6px !important;
+  padding: 7px 14px !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  cursor: pointer !important;
+  margin-right: 12px !important;
+  transition: all 0.15s ease !important;
+}
+
+.change-form input[type="file"]::file-selector-button:hover,
+.erp-panel input[type="file"]::file-selector-button:hover,
+.erp-form-file::file-selector-button:hover {
+  background: rgba(15, 118, 110, 0.18) !important;
+}
+
+/* Read-Only Fields */
+.change-form .readonly,
+.change-form p.readonly,
+.erp-form-readonly {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px dashed var(--erp-border) !important;
+  border-radius: var(--erp-input-radius) !important;
+  padding: 9px 14px !important;
+  font-size: 13.5px !important;
+  color: var(--erp-text) !important;
+  min-height: var(--erp-input-height) !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+html.dark .change-form .readonly,
+html.dark .change-form p.readonly,
+html.dark .erp-form-readonly {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.4 Labels, Required Indicators & Help Text
+   -------------------------------------------------------------------------- */
+.change-form label,
+.erp-panel label,
+.erp-form-label {
+  color: var(--erp-label-color) !important;
+  font-size: 13px !important;
+  font-weight: var(--erp-label-weight) !important;
+  margin-bottom: 6px !important;
+  display: block !important;
+}
+
+/* Required field indicator */
+.change-form .required label::after,
+.change-form label.required::after,
+.change-form .form-row.required label::after,
+.erp-panel .required label::after,
+.erp-form-label.required::after {
+  content: " *" !important;
+  color: var(--erp-error-color) !important;
+  font-weight: 700 !important;
+}
+
+/* Help text */
+.change-form .help,
+.change-form p.help,
+.erp-panel .help,
+.erp-panel p.help,
+.erp-form-help {
+  color: var(--erp-label-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  margin-top: 5px !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.5 Validation Messages & Error States (Phase G)
+   -------------------------------------------------------------------------- */
+.change-form input.error,
+.change-form select.error,
+.change-form textarea.error,
+.change-form .errors input,
+.change-form .errors select,
+.change-form .errors textarea,
+.erp-form-input-error {
+  border-color: var(--erp-error-color) !important;
+  box-shadow: 0 0 0 3px var(--erp-error-bg) !important;
+}
+
+.change-form .errorlist,
+.erp-panel .errorlist,
+.erp-form-error {
+  color: var(--erp-error-color) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  margin-top: 5px !important;
+  padding-left: 0 !important;
+  list-style: none !important;
+}
+
+.change-form .errornote,
+.erp-panel .errornote {
+  background-color: var(--erp-error-bg) !important;
+  border: 1px solid var(--erp-error-border) !important;
+  color: var(--erp-error-color) !important;
+  border-radius: var(--erp-form-radius) !important;
+  padding: 12px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  margin-bottom: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.6 Inline Formsets (Phase E)
+   -------------------------------------------------------------------------- */
+.change-form .inline-group table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.change-form .inline-group th {
+  background: rgba(0, 0, 0, 0.02) !important;
+  color: var(--erp-muted) !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  border-bottom: 1px solid var(--erp-form-border) !important;
+  padding: 11px 16px !important;
+  text-align: left !important;
+}
+
+html.dark .change-form .inline-group th {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.change-form .inline-group td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--erp-form-border) !important;
+  vertical-align: middle !important;
+}
+
+.change-form .inline-group tr:hover td {
+  background-color: rgba(15, 118, 110, 0.02) !important;
+}
+
+/* Inline Add Row Button */
+.change-form .inline-group .add-row a,
+.change-form .inline-add-row {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 18px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  color: var(--erp-teal) !important;
+  background: var(--erp-teal-light) !important;
+  border: 1px solid rgba(15, 118, 110, 0.25) !important;
+  margin: 12px 16px !important;
+  text-decoration: none !important;
+  transition: all 0.15s ease !important;
+}
+
+.change-form .inline-group .add-row a:hover,
+.change-form .inline-add-row:hover {
+  background: rgba(15, 118, 110, 0.2) !important;
+  color: var(--erp-teal-hover) !important;
+}
+
+/* Inline Delete / Trash Control */
+.change-form .inline-deletelink,
+.change-form .delete-template {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 6px !important;
+  color: var(--erp-error-color) !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.change-form .inline-deletelink:hover,
+.change-form .delete-template:hover {
+  background-color: var(--erp-error-bg) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.7 Sticky Submit Bar & Professional Action Buttons (Phase F)
+   -------------------------------------------------------------------------- */
+#submit-row {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 40 !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-top: 1px solid var(--erp-border) !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04) !important;
+  padding: 14px 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  box-sizing: border-box !important;
+  border-radius: 0 0 var(--erp-form-radius) var(--erp-form-radius) !important;
+}
+
+html.dark #submit-row {
+  background: rgba(15, 23, 42, 0.94) !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Primary Action Button (Solid Deep Teal) */
+#submit-row button[name="_save"],
+#submit-row input[type="submit"][name="_save"],
+button.erp-btn-primary,
+a.erp-btn-primary {
+  background: #0f766e !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border: 1px solid #0f766e !important;
+  border-radius: var(--erp-input-radius) !important;
+  padding: 9px 22px !important;
+  font-size: 13.5px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+#submit-row button[name="_save"]:hover,
+#submit-row input[type="submit"][name="_save"]:hover,
+button.erp-btn-primary:hover,
+a.erp-btn-primary:hover {
+  background: #115e59 !important;
+  border-color: #115e59 !important;
+  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.25) !important;
+}
+
+/* Secondary Action Buttons (Save & Continue, Save & Add Another, Cancel) */
+#submit-row button[name="_continue"],
+#submit-row button[name="_addanother"],
+#submit-row input[name="_continue"],
+#submit-row input[name="_addanother"],
+button.erp-btn-secondary,
+a.erp-btn-secondary {
+  background: transparent !important;
+  color: var(--erp-text) !important;
+  border: 1px solid var(--erp-border) !important;
+  border-radius: var(--erp-input-radius) !important;
+  padding: 9px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+}
+
+#submit-row button[name="_continue"]:hover,
+#submit-row button[name="_addanother"]:hover,
+button.erp-btn-secondary:hover,
+a.erp-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: var(--erp-input-border-hover) !important;
+}
+
+html.dark #submit-row button[name="_continue"]:hover,
+html.dark #submit-row button[name="_addanother"]:hover,
+html.dark button.erp-btn-secondary:hover,
+html.dark a.erp-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Destructive Delete Button */
+#submit-row a.deletelink,
+#submit-row a[href*="/delete/"],
+button.erp-btn-danger,
+a.erp-btn-danger {
+  color: #dc2626 !important;
+  background: transparent !important;
+  border: 1px solid rgba(220, 38, 38, 0.35) !important;
+  border-radius: var(--erp-input-radius) !important;
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  margin-right: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+}
+
+#submit-row a.deletelink:hover,
+#submit-row a[href*="/delete/"]:hover,
+button.erp-btn-danger:hover,
+a.erp-btn-danger:hover {
+  background-color: var(--erp-error-bg) !important;
+  border-color: #dc2626 !important;
+}
+
+/* --------------------------------------------------------------------------
+   8.8 Responsive Form Adaptations (Desktop 2-Col, Tablet, Mobile 1-Col)
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  /* Paired fields naturally render in two columns */
+  .change-form fieldset .flex-row:not(.erp-full-width) {
+    gap: var(--erp-field-gap) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Force all paired rows to single column on mobile */
+  .change-form fieldset .flex-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .change-form fieldset .flex-row > div {
+    width: 100% !important;
+  }
+
+  /* Full-width sticky action bar on mobile */
+  #submit-row {
+    flex-direction: column-reverse !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 12px 16px !important;
+  }
+
+  #submit-row button,
+  #submit-row input,
+  #submit-row a {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: var(--erp-touch-target) !important;
+  }
+
+  #submit-row a.deletelink {
+    margin-right: 0 !important;
+  }
+}
+

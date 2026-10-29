@@ -74,6 +74,38 @@ class InvoiceAdmin(ModelAdmin):
     )
     inlines = [InvoiceItemInline]
 
+    fieldsets = (
+        ("Invoice Header", {
+            "description": "Invoice tracking number, recipient member, and branch context.",
+            "fields": (
+                ("invoice_number", "branch"),
+                ("member", "status"),
+                ("issue_date", "due_date"),
+            ),
+        }),
+        ("Financial Totals", {
+            "description": "Calculated subtotal, discounts, tax, and outstanding balance in ETB.",
+            "fields": (
+                ("subtotal", "total_amount"),
+                ("paid_amount", "balance_due"),
+            ),
+        }),
+        ("Associated Subscriptions & Notes", {
+            "fields": (
+                ("membership", "renewal"),
+                "notes",
+            ),
+        }),
+        ("Audit Metadata", {
+            "classes": ("collapse",),
+            "description": "System issuance and user timestamps.",
+            "fields": (
+                ("created_by", "issued_by"),
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("member", "branch", "membership", "renewal")
         if is_owner(request.user) or request.user.is_superuser:
@@ -249,6 +281,33 @@ class PaymentAdmin(ModelAdmin):
         "updated_at",
     )
 
+    fieldsets = (
+        ("Payment Transaction", {
+            "description": "Receipt number, associated invoice, amount, and payment method.",
+            "fields": (
+                ("payment_number", "branch"),
+                ("invoice", "payment_method"),
+                ("amount", "status"),
+                "transaction_reference",
+            ),
+        }),
+        ("Verification & Verification Audit", {
+            "description": "Verification authorization, collection staff, and notes.",
+            "fields": (
+                ("received_by", "paid_at"),
+                ("verified_by", "verified_at"),
+                "notes",
+            ),
+        }),
+        ("Security & Audit Metadata", {
+            "classes": ("collapse",),
+            "fields": (
+                "idempotency_key",
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("invoice", "branch", "payment_method", "invoice__member")
         if is_owner(request.user) or request.user.is_superuser:
@@ -396,6 +455,32 @@ class RefundAdmin(ModelAdmin):
         "completed_at",
         "created_at",
         "updated_at",
+    )
+
+    fieldsets = (
+        ("Refund Request", {
+            "description": "Refund tracking ID, linked payment, invoice, and reimbursable amount.",
+            "fields": (
+                ("refund_number", "status"),
+                ("payment", "invoice"),
+                "amount",
+                "reason",
+            ),
+        }),
+        ("Approval & Completion", {
+            "description": "Manager authorization timestamps and completion audit.",
+            "fields": (
+                ("requested_by", "approved_by"),
+                ("approved_at", "completed_at"),
+                "completed_by",
+            ),
+        }),
+        ("Audit Metadata", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+            ),
+        }),
     )
 
     def get_queryset(self, request):
