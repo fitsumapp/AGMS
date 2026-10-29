@@ -1067,20 +1067,42 @@ body.overflow-hidden {
 }
 
 /* --------------------------------------------------------------------------
-   8.2 Section Cards & Fieldset Elevation (Phase D)
+   8.2 Section Cards & Fieldset Elevation (Phase D - Accordion & Left Accent Stripe)
    -------------------------------------------------------------------------- */
 .change-form fieldset.module,
 .change-form .inline-group {
   background: var(--erp-form-bg) !important;
   border: 1px solid var(--erp-form-border) !important;
+  border-left: 5px solid #0284c7 !important; /* Vibrant Cyan/Blue Accent Stripe */
   border-radius: var(--erp-form-radius) !important;
-  box-shadow: var(--erp-form-shadow) !important;
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.04) !important;
   margin-bottom: var(--erp-section-gap) !important;
   overflow: hidden !important;
+  position: relative !important;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Fieldset and Inline Headings */
+/* Sequential Color Accents on Left Borders matching user screenshot */
+/* Section 1: Vibrant Blue / Cyan */
+.change-form fieldset.module:nth-of-type(1) { border-left-color: #0284c7 !important; }
+/* Section 2: Ocean Sky Blue */
+.change-form fieldset.module:nth-of-type(2) { border-left-color: #0284c7 !important; }
+/* Section 3: Vibrant Orange / Amber */
+.change-form fieldset.module:nth-of-type(3) { border-left-color: #f59e0b !important; }
+/* Section 4: Vibrant Purple / Violet */
+.change-form fieldset.module:nth-of-type(4) { border-left-color: #8b5cf6 !important; }
+/* Section 5: Vibrant Teal / Emerald */
+.change-form fieldset.module:nth-of-type(5) { border-left-color: #10b981 !important; }
+/* Section 6: Vibrant Coral / Rose */
+.change-form fieldset.module:nth-of-type(6) { border-left-color: #f43f5e !important; }
+
+/* Inline Formsets Sequential Border Accents */
+.change-form .inline-group:nth-of-type(1) { border-left-color: #f59e0b !important; }
+.change-form .inline-group:nth-of-type(2) { border-left-color: #8b5cf6 !important; }
+.change-form .inline-group:nth-of-type(3) { border-left-color: #10b981 !important; }
+.change-form .inline-group:nth-of-type(4) { border-left-color: #06b6d4 !important; }
+
+/* Fieldset and Inline Headings with Right Chevron */
 .change-form fieldset.module > h2,
 .change-form fieldset.module > details > summary h2,
 .change-form .inline-group > h2,
@@ -1095,10 +1117,30 @@ body.overflow-hidden {
   border-radius: var(--erp-form-radius) var(--erp-form-radius) 0 0 !important;
   display: flex !important;
   align-items: center !important;
+  justify-content: space-between !important;
   gap: 8px !important;
   letter-spacing: -0.01em !important;
   min-height: 44px !important;
   box-sizing: border-box !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+/* Chevron caret icon on the right of the header */
+.change-form fieldset.module > h2::after,
+.change-form fieldset.module > details > summary h2::after,
+.change-form .inline-group > h2::after,
+.change-form .inline-heading::after {
+  content: '⌃' !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  margin-left: auto !important;
+  transition: transform 0.2s ease !important;
+}
+
+.change-form fieldset.module details:not([open]) > summary h2::after {
+  content: '⌄' !important;
 }
 
 /* Section descriptions */
@@ -1239,22 +1281,24 @@ body.overflow-hidden {
 .change-form input[type="file"]::file-selector-button,
 .erp-panel input[type="file"]::file-selector-button,
 .erp-form-file::file-selector-button {
-  background: var(--erp-teal-light) !important;
-  color: var(--erp-teal) !important;
-  border: 1px solid rgba(15, 118, 110, 0.25) !important;
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid #0284c7 !important;
   border-radius: 6px !important;
-  padding: 7px 14px !important;
+  padding: 8px 16px !important;
   font-weight: 600 !important;
-  font-size: 12.5px !important;
+  font-size: 13px !important;
   cursor: pointer !important;
   margin-right: 12px !important;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2) !important;
   transition: all 0.15s ease !important;
 }
 
 .change-form input[type="file"]::file-selector-button:hover,
 .erp-panel input[type="file"]::file-selector-button:hover,
 .erp-form-file::file-selector-button:hover {
-  background: rgba(15, 118, 110, 0.18) !important;
+  background: #0369a1 !important;
+  border-color: #0369a1 !important;
 }
 
 /* Read-Only Fields */
@@ -1457,17 +1501,19 @@ html.dark #submit-row {
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Primary Action Button (Solid Deep Teal) */
+/* Submit Action Buttons (Solid Vibrant Blue matching screenshot) */
 #submit-row button[name="_save"],
-#submit-row input[type="submit"][name="_save"],
+#submit-row button[name="_addanother"],
+#submit-row button[name="_continue"],
+#submit-row input[type="submit"],
 button.erp-btn-primary,
 a.erp-btn-primary {
-  background: #0f766e !important;
+  background: #0284c7 !important;
   color: #ffffff !important;
   font-weight: 600 !important;
-  border: 1px solid #0f766e !important;
-  border-radius: var(--erp-input-radius) !important;
-  padding: 9px 22px !important;
+  border: 1px solid #0284c7 !important;
+  border-radius: 8px !important;
+  padding: 9px 20px !important;
   font-size: 13.5px !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -1475,30 +1521,28 @@ a.erp-btn-primary {
   gap: 6px !important;
   cursor: pointer !important;
   text-decoration: none !important;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.25) !important;
 }
 
 #submit-row button[name="_save"]:hover,
-#submit-row input[type="submit"][name="_save"]:hover,
+#submit-row button[name="_addanother"]:hover,
+#submit-row button[name="_continue"]:hover,
+#submit-row input[type="submit"]:hover,
 button.erp-btn-primary:hover,
 a.erp-btn-primary:hover {
-  background: #115e59 !important;
-  border-color: #115e59 !important;
-  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.25) !important;
+  background: #0369a1 !important;
+  border-color: #0369a1 !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35) !important;
 }
 
-/* Secondary Action Buttons (Save & Continue, Save & Add Another, Cancel) */
-#submit-row button[name="_continue"],
-#submit-row button[name="_addanother"],
-#submit-row input[name="_continue"],
-#submit-row input[name="_addanother"],
+/* Secondary Action Buttons (Cancel / Outlines) */
 button.erp-btn-secondary,
 a.erp-btn-secondary {
   background: transparent !important;
   color: var(--erp-text) !important;
   border: 1px solid var(--erp-border) !important;
-  border-radius: var(--erp-input-radius) !important;
+  border-radius: 8px !important;
   padding: 9px 18px !important;
   font-size: 13px !important;
   font-weight: 600 !important;
@@ -1511,8 +1555,6 @@ a.erp-btn-secondary {
   transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
 
-#submit-row button[name="_continue"]:hover,
-#submit-row button[name="_addanother"]:hover,
 button.erp-btn-secondary:hover,
 a.erp-btn-secondary:hover {
   background: rgba(0, 0, 0, 0.03) !important;

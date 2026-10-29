@@ -48,6 +48,40 @@ class MemberRegistrationForm(forms.ModelForm):
             if branches.count() == 1:
                 self.fields["home_branch"].initial = branches.first()
 
+        bilingual_labels = {
+            "first_name": "First Name (ስም)",
+            "middle_name": "Middle Name (የአባት ስም)",
+            "last_name": "Last Name (የአያት ስም)",
+            "phone": "Phone Number (ስልክ ቁጥር)",
+            "alternative_phone": "Alternative Phone (ተጨማሪ ስልክ)",
+            "email": "Email Address (ኢሜይል)",
+            "date_of_birth": "Date of Birth (የትውልድ ቀን)",
+            "gender": "Gender (ጾታ)",
+            "home_branch": "Home Branch (ቅርንጫፍ)",
+            "address": "Residential Address (አድራሻ)",
+            "city": "City (ከተማ)",
+            "photo": "Profile Photo (የአባል ፎቶ)",
+            "registration_source": "Registration Source (የምዝገባ መንገድ)",
+            "referral_source": "Referral Source (የሪፈራል ምንጭ)",
+        }
+        bilingual_help = {
+            "first_name": "Full legal first name of the member.",
+            "middle_name": "Father's name.",
+            "last_name": "Grandfather's or family name.",
+            "phone": "Primary Ethiopian mobile number (09... or +251...).",
+            "alternative_phone": "Secondary or emergency phone number.",
+            "email": "Valid email address for receipts and digital notices.",
+            "home_branch": "Select primary gym facility for access and billing.",
+            "photo": "Upload a portrait / passport-sized photo of the member (JPG/PNG).",
+            "address": "Sub-city, Woreda, or house address.",
+        }
+        for name, lbl in bilingual_labels.items():
+            if name in self.fields:
+                self.fields[name].label = lbl
+        for name, hlp in bilingual_help.items():
+            if name in self.fields:
+                self.fields[name].help_text = hlp
+
     def clean_phone(self):
         phone = self.cleaned_data.get("phone")
         return normalize_ethiopian_phone(phone)
@@ -101,6 +135,27 @@ class MemberChangeForm(forms.ModelForm):
             "registration_source",
             "referral_source",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        bilingual_labels = {
+            "first_name": "First Name (ስም)",
+            "middle_name": "Middle Name (የአባት ስም)",
+            "last_name": "Last Name (የአያት ስም)",
+            "phone": "Phone Number (ስልክ ቁጥር)",
+            "alternative_phone": "Alternative Phone (ተጨማሪ ስልክ)",
+            "email": "Email Address (ኢሜይል)",
+            "date_of_birth": "Date of Birth (የትውልድ ቀን)",
+            "gender": "Gender (ጾታ)",
+            "address": "Residential Address (አድራሻ)",
+            "city": "City (ከተማ)",
+            "photo": "Profile Photo (የአባል ፎቶ)",
+            "registration_source": "Registration Source (የምዝገባ መንገድ)",
+            "referral_source": "Referral Source (የሪፈራል ምንጭ)",
+        }
+        for name, lbl in bilingual_labels.items():
+            if name in self.fields:
+                self.fields[name].label = lbl
 
     def clean_phone(self):
         phone = self.cleaned_data.get("phone")

@@ -81,12 +81,12 @@ class TestMemberAdminFormDesign:
         add_fieldsets = admin.add_fieldsets
 
         section_names = [f[0] for f in add_fieldsets if f[0]]
-        assert "Personal Information" in section_names
-        assert "Contact Information" in section_names
-        assert "Gym Registration" in section_names
+        assert any("Personal" in name for name in section_names)
+        assert any("Contact" in name for name in section_names)
+        assert any("Gym Registration" in name for name in section_names)
 
         # Verify Gym Registration includes safety confirmation
-        gym_reg = next(f for f in add_fieldsets if f[0] == "Gym Registration")
+        gym_reg = next(f for f in add_fieldsets if "Gym Registration" in f[0])
         fields = gym_reg[1].get("fields", ())
         assert "confirm_possible_duplicate" in fields
 
@@ -94,7 +94,7 @@ class TestMemberAdminFormDesign:
         admin = site._registry[Member]
         fieldsets = admin.fieldsets
 
-        personal_info = next(f for f in fieldsets if f[0] == "Personal Information")
+        personal_info = next(f for f in fieldsets if "Personal" in f[0])
         fields = personal_info[1].get("fields", ())
         # Should contain 2-column paired tuples like ('first_name', 'last_name')
         has_paired_tuple = any(isinstance(f, (list, tuple)) and len(f) == 2 for f in fields)
@@ -115,9 +115,9 @@ class TestMemberAdminFormDesign:
         assert response.status_code == 200
         content = response.content.decode("utf-8")
         assert "csrfmiddlewaretoken" in content
-        assert "Personal Information" in content
-        assert "Contact Information" in content
-        assert "Gym Registration" in content
+        assert "Personal &amp; Identity" in content or "Personal & Identity" in content
+        assert "First Name (ስም)" in content
+        assert "Phone Number (ስልክ ቁጥር)" in content
 
 
 @pytest.mark.django_db
