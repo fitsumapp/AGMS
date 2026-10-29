@@ -75,6 +75,7 @@ def get_billing_metrics(user, active_branch=None) -> dict:
         refund_qs.filter(
             status=Refund.Status.COMPLETED,
             completed_at__date__gte=month_start,
+            completed_at__date__lte=today,
         ).aggregate(total=Sum("amount"))["total"]
         or Decimal("0.00")
     )

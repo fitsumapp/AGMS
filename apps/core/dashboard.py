@@ -60,11 +60,12 @@ def dashboard(request, context):
         active_profiles_val = metrics["active_profiles"]
         total_val = metrics["total_members"]
         new_month_val = metrics["new_this_month"]
-        member_status_label = f"{total_val} total registered"
+        member_status_label = f"{active_profiles_val} active profile{'s' if active_profiles_val != 1 else ''}"
         member_change_label = f"+{new_month_val} this month" if new_month_val else "No new this month"
     except Exception:
+        total_val = 0
         active_profiles_val = 0
-        member_status_label = "0 total registered"
+        member_status_label = "0 active profiles"
         member_change_label = None
 
     try:
@@ -111,7 +112,7 @@ def dashboard(request, context):
         }
 
     kpi_cards = [
-        {"title": "Active Members Profiles", "icon": "groups", "value": active_profiles_val, "status": member_status_label, "change": member_change_label, "permission": True},
+        {"title": "Total Registered Members", "icon": "groups", "value": total_val, "status": member_status_label, "change": member_change_label, "permission": True},
         {"title": "Today's Check-ins", "icon": "how_to_reg", "value": att_metrics["today_checkins"], "status": f"{att_metrics['currently_inside']} currently inside", "change": f"{att_metrics['unique_visitors_today']} unique today", "permission": True},
         {"title": "Monthly Revenue", "icon": "payments", "value": f"{b_metrics['monthly_collections']:,.2f} ETB", "status": f"Net: {b_metrics['net_collections_month']:,.2f} ETB", "change": f"Today: {b_metrics['today_collections']:,.2f} ETB", "permission": True},
         {"title": "Active Memberships", "icon": "card_membership", "value": m_metrics["active_memberships"], "status": f"{m_metrics['pending_memberships']} pending clearance", "change": f"{m_metrics['expiring_7_days']} expiring in 7d", "permission": True},

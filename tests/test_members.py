@@ -474,8 +474,8 @@ def test_dashboard_member_metrics(client, gym_owner, branch_manager_a, branch_a,
     res = client.get(reverse("admin:index"))
     assert res.status_code == 200
     html = res.content.decode()
-    assert "Active Members Profiles" in html
-    assert "4 total registered" in html
+    assert "Total Registered Members" in html
+    assert "3 active profiles" in html
 
 
 # ==============================================================================

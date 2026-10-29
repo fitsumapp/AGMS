@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n humanize %}
 {% block content_title %}{{ gym_name|default:_("Gym ERP Administration") }}{% endblock %}
 {% block title %}{{ gym_name|default:_("Gym ERP Administration") }} | {{ site_title }}{% endblock %}
 {% block content %}
@@ -24,34 +24,34 @@
       {% if membership_metrics.active_memberships or membership_metrics.pending_memberships or membership_metrics.frozen_memberships or membership_metrics.expired_memberships %}
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; padding: 1rem 0;">
         <div style="padding: 0.75rem 1rem; background: rgba(15, 118, 110, 0.08); border-radius: 8px; border-left: 3px solid #0F766E;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Active</small>
-          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.active_memberships }}</p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Active</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ membership_metrics.active_memberships }}</p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(217, 119, 6, 0.08); border-radius: 8px; border-left: 3px solid #D97706;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Pending</small>
-          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.pending_memberships }}</p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Pending</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ membership_metrics.pending_memberships }}</p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(14, 165, 233, 0.08); border-radius: 8px; border-left: 3px solid #0EA5E9;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Frozen</small>
-          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.frozen_memberships }}</p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Frozen</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ membership_metrics.frozen_memberships }}</p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.08); border-radius: 8px; border-left: 3px solid #EF4444;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expired</small>
-          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.expired_memberships }}</p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expired</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ membership_metrics.expired_memberships }}</p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(168, 85, 247, 0.08); border-radius: 8px; border-left: 3px solid #A855F7;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expiring 7d</small>
-          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ membership_metrics.expiring_7_days }}</p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Expiring 7d</small>
+          <p style="font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ membership_metrics.expiring_7_days }}</p>
         </div>
       </div>
       {% if membership_metrics.memberships_by_package %}
-      <div style="padding-top: 0.5rem; border-top: 1px solid #E2E8F0;">
-        <h4 style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Active by Package</h4>
+      <div style="padding-top: 0.5rem; border-top: 1px solid var(--erp-border);">
+        <h4 style="font-size: 0.8rem; font-weight: 600; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Active by Package</h4>
         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
           {% for pkg in membership_metrics.memberships_by_package %}
-          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: #F1F5F9; border-radius: 9999px; font-size: 0.8rem; color: #334155;">
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: var(--erp-page); border: 1px solid var(--erp-border); border-radius: 9999px; font-size: 0.8rem; color: var(--erp-text);">
             <span>{{ pkg.package__name }}</span>
-            <strong style="color: #0F766E;">{{ pkg.total }}</strong>
+            <strong style="color: var(--erp-teal);">{{ pkg.total }}</strong>
           </span>
           {% endfor %}
         </div>
@@ -66,35 +66,35 @@
       <div class="erp-panel-head"><div><p class="erp-overline">Financial</p><h2>Collections & Billing Overview</h2></div><span class="material-symbols-outlined">payments</span></div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; padding: 1rem 0;">
         <div style="padding: 0.75rem 1rem; background: rgba(15, 118, 110, 0.08); border-radius: 8px; border-left: 3px solid #0F766E;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Today's Cash</small>
-          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.today_collections }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Today's Cash</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ billing_metrics.today_collections|floatformat:2|intcomma }} <small style="font-size: 0.75rem; font-weight: normal; color: var(--erp-muted);">ETB</small></p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(14, 165, 233, 0.08); border-radius: 8px; border-left: 3px solid #0EA5E9;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Gross Collections</small>
-          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.monthly_collections }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Gross Collections</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ billing_metrics.monthly_collections|floatformat:2|intcomma }} <small style="font-size: 0.75rem; font-weight: normal; color: var(--erp-muted);">ETB</small></p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.08); border-radius: 8px; border-left: 3px solid #EF4444;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Refunds Paid</small>
-          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.refund_totals_month }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Refunds Paid</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ billing_metrics.refund_totals_month|floatformat:2|intcomma }} <small style="font-size: 0.75rem; font-weight: normal; color: var(--erp-muted);">ETB</small></p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(34, 197, 94, 0.08); border-radius: 8px; border-left: 3px solid #22C55E;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Net Collections</small>
-          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.net_collections_month }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Net Collections</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ billing_metrics.net_collections_month|floatformat:2|intcomma }} <small style="font-size: 0.75rem; font-weight: normal; color: var(--erp-muted);">ETB</small></p>
         </div>
         <div style="padding: 0.75rem 1rem; background: rgba(217, 119, 6, 0.08); border-radius: 8px; border-left: 3px solid #D97706;">
-          <small style="color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Outstanding</small>
-          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: #0F172A;">{{ billing_metrics.outstanding_balances }} <small style="font-size: 0.75rem; font-weight: normal;">ETB</small></p>
+          <small style="color: var(--erp-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">Outstanding</small>
+          <p style="font-size: 1.3rem; font-weight: 700; margin: 0.25rem 0 0 0; color: var(--erp-text);">{{ billing_metrics.outstanding_balances|floatformat:2|intcomma }} <small style="font-size: 0.75rem; font-weight: normal; color: var(--erp-muted);">ETB</small></p>
         </div>
       </div>
       {% if billing_metrics.collections_by_method %}
-      <div style="padding-top: 0.5rem; border-top: 1px solid #E2E8F0;">
-        <h4 style="font-size: 0.8rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Verified Collections by Method (This Month)</h4>
+      <div style="padding-top: 0.5rem; border-top: 1px solid var(--erp-border);">
+        <h4 style="font-size: 0.8rem; font-weight: 600; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Verified Collections by Method (This Month)</h4>
         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
           {% for m in billing_metrics.collections_by_method %}
-          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: #F1F5F9; border-radius: 9999px; font-size: 0.8rem; color: #334155;">
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.6rem; background: var(--erp-page); border: 1px solid var(--erp-border); border-radius: 9999px; font-size: 0.8rem; color: var(--erp-text);">
             <span>{{ m.payment_method__name }}</span>
-            <strong style="color: #0F766E;">{{ m.total }} ETB</strong>
-            <small style="color: #94A3B8;">({{ m.count }})</small>
+            <strong style="color: var(--erp-teal);">{{ m.total|floatformat:2|intcomma }} ETB</strong>
+            <small style="color: var(--erp-muted);">({{ m.count }})</small>
           </span>
           {% endfor %}
         </div>

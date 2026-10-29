@@ -1,5 +1,5 @@
 {% if card.permission %}<article class="erp-kpi-card">
-  <div class="erp-kpi-top"><span class="erp-kpi-icon material-symbols-outlined" aria-hidden="true">{{ card.icon }}</span><span class="erp-kpi-stage">Coming soon</span></div>
+  <div class="erp-kpi-top"><span class="erp-kpi-icon material-symbols-outlined" aria-hidden="true">{{ card.icon }}</span>{% if card.badge %}<span class="erp-kpi-stage">{{ card.badge }}</span>{% elif card.stage %}<span class="erp-kpi-stage">{{ card.stage }}</span>{% endif %}</div>
   <h3>{{ card.title }}</h3>
   <p class="erp-kpi-value">{% if card.value is not None %}{{ card.value }}{% else %}—{% endif %}</p>
   <p class="erp-kpi-detail">{{ card.status }}</p>

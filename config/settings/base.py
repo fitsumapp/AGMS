@@ -13,6 +13,7 @@ INSTALLED_APPS = [
     "unfold", "django.contrib.admin", "django.contrib.auth",
     "django.contrib.contenttypes", "django.contrib.sessions",
     "django.contrib.messages", "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "apps.accounts.apps.AccountsConfig", "apps.core.apps.CoreConfig",
     "apps.branches.apps.BranchesConfig", "apps.members.apps.MembersConfig",
     "apps.memberships.apps.MembershipsConfig", "apps.billing.apps.BillingConfig",

@@ -40,9 +40,10 @@ def get_member_metrics(user, active_branch=None):
     inactive = counts_map.get(Member.MemberStatus.INACTIVE, 0)
     suspended = counts_map.get(Member.MemberStatus.SUSPENDED, 0)
 
-    # New this month
-    now = timezone.now()
-    new_this_month = qs.filter(joined_at__year=now.year, joined_at__month=now.month).count()
+    # New this month (registration date within current month up to today)
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    new_this_month = qs.filter(joined_at__date__gte=month_start, joined_at__date__lte=today).count()
 
     # Registrations by branch
     by_branch = list(
