@@ -4,6 +4,7 @@
 **Workspace:** `C:\Users\BAB AL SAFA\Desktop\AGMS`  
 **Date:** October 2026  
 **Branch:** `step-04b/global-form-modernization`  
+**Commit:** `4affef5`  
 **Stack:** Django 5.2.18, PostgreSQL 17, Django Unfold Admin 0.110.0, Alpine.js, Tailwind/Unfold-compatible CSS  
 
 ---
