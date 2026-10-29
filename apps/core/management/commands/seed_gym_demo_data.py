@@ -1,4 +1,5 @@
 import hashlib
+import os
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -6,7 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -72,7 +73,7 @@ from apps.staff.models import (
 )
 
 User = get_user_model()
-DEMO_PASSWORD = "DemoPassword2026!"
+DEMO_PASSWORD = os.environ.get("AGMS_DEMO_PASSWORD", "DemoPassword2026!")
 
 
 class Command(BaseCommand):
@@ -82,26 +83,36 @@ class Command(BaseCommand):
         parser.add_argument(
             "--reset-demo",
             action="store_true",
-            help="Purge previously created demo records before seeding.",
+            help="Deprecated/disabled: Direct cascade deletion of records is forbidden.",
         )
 
     def handle(self, *args, **options):
+        # 0. Strict Production Guard
+        if not settings.DEBUG or os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith(".production"):
+            raise CommandError(
+                "SECURITY HALT: seed_gym_demo_data cannot be executed in production environments "
+                "(DEBUG=False or production settings detected)."
+            )
+
+        if options.get("reset_demo"):
+            raise CommandError(
+                "DESTRUCTIVE RESET BLOCKED: Direct cascade purge of members, invoices, and payments is disabled "
+                "to preserve audit trail and financial integrity. For demo resets, run against an isolated disposable "
+                "database (e.g. POSTGRES_DB=demo_gym_erp)."
+            )
+
         self.stdout.write(self.style.NOTICE("==> Seeding AGMS Realistic Gym Demo Environment..."))
 
         # 1. Ensure Roles are seeded
         seed_roles()
         self.stdout.write(self.style.SUCCESS("[1/12] Business roles and permissions verified."))
 
-        # 2. Reset demo data if requested
-        if options.get("reset_demo"):
-            self.purge_demo_data()
-
-        # 3. Gym Profile & Branches
+        # 2. Gym Profile & Branches
         gym_profile = self.seed_gym_profile()
         addis_branch, bole_branch = self.seed_branches()
         self.stdout.write(self.style.SUCCESS(f"[2/12] Gym Profile and 2 Branches verified ({addis_branch.code}, {bole_branch.code})."))
 
-        # 4. Staff Accounts & Profiles
+        # 3. Staff Accounts & Profiles
         staff_map = self.seed_staff(addis_branch, bole_branch)
         self.stdout.write(self.style.SUCCESS(f"[3/12] Seeded {len(staff_map)} staff accounts across all 6 business roles."))
 
@@ -148,17 +159,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("AGMS DEMO ENVIRONMENT SEEDING COMPLETED SUCCESSFULLY!"))
         self.stdout.write(self.style.SUCCESS("All records are idempotent, isolated, and production-rule compliant."))
         self.stdout.write(self.style.SUCCESS("========================================================\n"))
-
-    def purge_demo_data(self):
-        self.stdout.write(self.style.WARNING("Purging existing demo records..."))
-        Member.objects.filter(email__startswith="demo_member_").delete()
-        User.objects.filter(email__startswith="demo_").delete()
-        MembershipPackage.objects.filter(code__startswith="DEMO-").delete()
-        Product.objects.filter(sku__startswith="DEMO-").delete()
-        Equipment.objects.filter(asset_code__startswith="DEMO-EQ-").delete()
-        LockerZone.objects.filter(code__startswith="DEMO-").delete()
-        Expense.objects.filter(reference__startswith="DEMO-EXP-").delete()
-        self.stdout.write(self.style.SUCCESS("Demo records purged."))
 
     def seed_gym_profile(self):
         profile, _ = GymProfile.objects.get_or_create(
@@ -323,8 +323,9 @@ class Command(BaseCommand):
                     "is_superuser": info["is_superuser"],
                 },
             )
-            user.set_password(DEMO_PASSWORD)
-            user.save()
+            if created:
+                user.set_password(DEMO_PASSWORD)
+                user.save()
 
             # Assign Group
             group = Group.objects.get(name=info["role"])
@@ -836,7 +837,7 @@ class Command(BaseCommand):
         ]
 
         total_scans = 0
-        now = timezone.now()
+        base_date = date(2026, 10, 26)
 
         for idx, (member, membership) in enumerate(active_members):
             token_secret = f"QR-TOKEN-{member.member_number}-{idx}"
@@ -852,25 +853,26 @@ class Command(BaseCommand):
                 },
             )
 
-            # Record historical check-ins across last 4 days
+            # Record historical check-ins across last 3 days
             for d in range(1, 4):
-                scan_time = now - timedelta(days=d, hours=(idx % 6) + 7)
-                checkout_time = scan_time + timedelta(minutes=75)
+                scan_dt = timezone.make_aware(datetime.combine(base_date - timedelta(days=d), time((idx % 6) + 7, (idx * 7) % 60, 0)))
+                checkout_dt = scan_dt + timedelta(minutes=75)
                 scan_branch = bole if (membership.cross_branch_snapshot and d % 2 == 0) else member.home_branch
 
-                Attendance.objects.get_or_create(
+                att, created = Attendance.objects.get_or_create(
                     member=member,
                     membership=membership,
                     branch=scan_branch,
-                    check_in_datetime=scan_time,
+                    check_in_datetime=scan_dt,
                     defaults={
-                        "check_out_datetime": checkout_time,
+                        "check_out_datetime": checkout_dt,
                         "check_in_method": Attendance.Method.QR if idx % 2 == 0 else Attendance.Method.MANUAL,
                         "check_out_method": Attendance.CheckoutMethod.QR,
                         "status": Attendance.Status.COMPLETED,
                     },
                 )
-                total_scans += 1
+                if created:
+                    total_scans += 1
 
         return total_scans
 
@@ -890,29 +892,37 @@ class Command(BaseCommand):
             )
             created_types.append(ctype)
 
-        # Create scheduled sessions for the current week
-        today = timezone.localdate()
+        # Create scheduled sessions for the anchor week
+        anchor_date = date(2026, 10, 26)
         trainers_addis = [staff_map["trainer_1_profile"], staff_map["trainer_3_profile"]]
         trainers_bole = [staff_map["trainer_2_profile"]]
         created_sessions = []
 
         for offset in range(-2, 5):
-            s_date = today + timedelta(days=offset)
+            s_date = anchor_date + timedelta(days=offset)
             target_branch = addis if offset % 2 == 0 else bole
             trainer = trainers_addis[offset % len(trainers_addis)] if target_branch == addis else trainers_bole[0]
 
-            session, _ = ClassSession.objects.get_or_create(
-                class_type=created_types[offset % len(created_types)],
+            existing_session = ClassSession.objects.filter(
                 branch=target_branch,
                 session_date=s_date,
                 start_time=time(18, 0),
-                defaults={
-                    "end_time": time(19, 0),
-                    "trainer": trainer,
-                    "capacity": 20,
-                    "status": "SCHEDULED" if offset >= 0 else "COMPLETED",
-                },
-            )
+            ).first()
+            if existing_session:
+                session = existing_session
+            else:
+                session, _ = ClassSession.objects.get_or_create(
+                    class_type=created_types[offset % len(created_types)],
+                    branch=target_branch,
+                    session_date=s_date,
+                    start_time=time(18, 0),
+                    defaults={
+                        "end_time": time(19, 0),
+                        "trainer": trainer,
+                        "capacity": 20,
+                        "status": "SCHEDULED" if offset >= 0 else "COMPLETED",
+                    },
+                )
             created_sessions.append(session)
 
             # Bookings for the session: only book members belonging to this branch or VIP
@@ -922,6 +932,13 @@ class Command(BaseCommand):
             ]
             for b_idx in range(min(5, len(eligible_members))):
                 b_member, b_membership = eligible_members[b_idx]
+                if ClassBooking.objects.filter(
+                    member=b_member,
+                    session__session_date=session.session_date,
+                    session__start_time=session.start_time,
+                ).exclude(session=session).exists():
+                    continue
+
                 ClassBooking.objects.get_or_create(
                     session=session,
                     member=b_member,

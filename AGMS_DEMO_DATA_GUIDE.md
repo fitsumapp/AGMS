@@ -90,25 +90,27 @@ The AGMS multi-branch model uses `UserBranchAccess` and `TenantModel` / `BranchQ
 
 ---
 
-## 6. Safe Reset & Cleanup
+## 6. Safe Reset & Environment Isolation
 
-Because demo records are deterministically tagged:
-- Fictional members carry email domains ending in `@example.test`.
-- Demo products have SKU numbers prefixed with `DEMO-PRD-`.
-- Demo invoices use number pattern `INV-DEMO-`.
-- Demo idempotency keys are prefixed with `IDEMP-PAY-DEMO-`.
+### Anti-Pattern: Never Direct-Delete Financial or Operational Records
+Direct cascade deletion of members, invoices, payments, or attendance logs (`.delete()`) violates financial auditability and ledger immutability constraints. In AGMS, posted financial transactions and receipts are protected by foreign key cascades and audit integrity rules.
 
-To clean up demo records without resetting your genuine development database:
-```python
-# Launch Django shell
-python manage.py shell
+### Safe Reset Strategy: Isolated Disposable Demo Databases
+When a clean slate is required for demonstration or exploratory testing, **always use an isolated disposable PostgreSQL database** rather than issuing destructive deletes against a shared or persistent environment:
 
-# Run targeted cleanup
-from apps.members.models import Member
-from apps.inventory.models import Product
-from apps.billing.models import Invoice
+```powershell
+# 1. Create a dedicated disposable demo database
+psql -U postgres -h 127.0.0.1 -p 55432 -c "CREATE DATABASE gym_demo_disposable OWNER gym_local;"
 
-Member.objects.filter(email__endswith='@example.test').delete()
-Product.objects.filter(product_number__startswith='DEMO-PRD-').delete()
-Invoice.objects.filter(invoice_number__startswith='INV-DEMO-').delete()
+# 2. Run migrations in the disposable database
+$env:POSTGRES_DB="gym_demo_disposable"
+.venv\Scripts\python.exe manage.py migrate
+
+# 3. Seed realistic demo data into the disposable database
+.venv\Scripts\python.exe manage.py seed_gym_demo_data
+
+# 4. When testing is finished, drop the entire disposable database cleanly
+psql -U postgres -h 127.0.0.1 -p 55432 -c "DROP DATABASE gym_demo_disposable;"
 ```
+
+This guarantees 100% isolation, prevents accidental loss of development or pre-production data, and preserves complete financial ledger integrity.
