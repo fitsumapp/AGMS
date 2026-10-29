@@ -336,7 +336,7 @@ def unfold_config():
     attendance_changelist = reverse_lazy("admin:attendance_attendance_changelist")
     accessattempt_changelist = reverse_lazy("admin:attendance_accessattempt_changelist")
 
-    return {
+    config = {
         "SITE_TITLE": "apps.core.dashboard.site_name",
         "SITE_HEADER": "apps.core.dashboard.site_name",
         "SITE_SUBHEADER": "Management Portal", "SITE_SYMBOL": "exercise",
@@ -346,9 +346,11 @@ def unfold_config():
         "STYLES": [lambda request: static("css/erp-admin.css")],
         "GLOBAL_CALLBACK": "apps.core.dashboard.global_context",
         "DASHBOARD_CALLBACK": "apps.core.dashboard.dashboard",
-        "SIDEBAR": {"show_all_applications": False, "navigation": [
-            {"title": "Overview", "items": [
-                {"title": "Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index")}]},
+    }
+
+    navigation = [
+        {"title": "Overview", "items": [
+            {"title": "Dashboard", "icon": "space_dashboard", "link": reverse_lazy("admin:index")}]},
             {"title": "Analytics & Reports", "items": [
                 {"title": "Executive Dashboard", "icon": "monitoring", "link": reverse_lazy("analytics-dashboard"), "permission": can_see_analytics},
                 {"title": "Financial Analytics", "icon": "query_stats", "link": reverse_lazy("analytics-financial"), "permission": can_see_financial_analytics},
@@ -497,5 +499,10 @@ def unfold_config():
                 {"title": "Gym Branding", "icon": "palette", "link": reverse_lazy("admin:core_gymbranding_changelist"), "permission": owner_or_superuser},
                 {"title": "Branch Assignments", "icon": "assignment_ind", "link": reverse_lazy("admin:branches_userbranchaccess_changelist"), "permission": owner_or_superuser},
             ]},
-        ]},
-    }
+        ]
+
+    for section in navigation:
+        section.setdefault("collapsible", True)
+
+    config["SIDEBAR"] = {"show_all_applications": False, "navigation": navigation}
+    return config
