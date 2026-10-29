@@ -148,5 +148,5 @@ None. All 12 requirements from Step 04A have been fulfilled. No architectural ch
 
 ## 10. Git Commit Hash
 
-- **Branch:** `step-04a/dashboard-kpi-refinement`
-- **Commit:** *(To be updated upon git commit)*
+- **Branch:** `step-04a/dashboard-kpi-refinement`  
+- **Commit:** `1a9e91e`  
