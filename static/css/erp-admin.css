@@ -1131,16 +1131,27 @@ body.overflow-hidden {
 .change-form fieldset.module > details > summary h2::after,
 .change-form .inline-group > h2::after,
 .change-form .inline-heading::after {
-  content: '⌃' !important;
-  font-size: 18px !important;
+  content: '⌄' !important; /* Default collapsed chevron pointing down */
+  font-size: 19px !important;
   font-weight: 700 !important;
-  color: #64748b !important;
+  color: #475569 !important;
   margin-left: auto !important;
   transition: transform 0.2s ease !important;
 }
 
-.change-form fieldset.module details:not([open]) > summary h2::after {
-  content: '⌄' !important;
+/* When expanded, chevron points up */
+.change-form fieldset.module.erp-expanded > h2::after,
+.change-form fieldset.module.erp-expanded > details > summary h2::after,
+.change-form .inline-group.erp-expanded > h2::after,
+.change-form fieldset.module details[open] > summary h2::after {
+  content: '⌃' !important;
+}
+
+/* When explicitly collapsed, ensure rounded corners on all sides */
+.change-form fieldset.module.erp-collapsed > h2,
+.change-form fieldset.module.erp-collapsed .inline-heading {
+  border-bottom: none !important;
+  border-radius: var(--erp-form-radius) !important;
 }
 
 /* Section descriptions */

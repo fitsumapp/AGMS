@@ -344,6 +344,7 @@ def unfold_config():
         "SITE_URL": None, "SHOW_VIEW_ON_SITE": False,
         "COLORS": {"primary": primary_shades(), "sidebar": {"600": SIDEBAR}},
         "STYLES": [lambda request: static("css/erp-admin.css")],
+        "SCRIPTS": [lambda request: static("js/form-accordion.js")],
         "GLOBAL_CALLBACK": "apps.core.dashboard.global_context",
         "DASHBOARD_CALLBACK": "apps.core.dashboard.dashboard",
     }
