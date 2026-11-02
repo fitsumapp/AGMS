@@ -35,6 +35,8 @@ from .services import (
 class MemberEmergencyContactInline(TabularInline):
     model = MemberEmergencyContact
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     verbose_name = "Emergency Contact / የአደጋ ጊዜ ተጠሪ"
     verbose_name_plural = "Emergency Contacts / የአደጋ ጊዜ ተጠሪዎች"
     fields = ("full_name", "relationship", "phone", "alternative_phone", "is_primary")
@@ -43,6 +45,8 @@ class MemberEmergencyContactInline(TabularInline):
 class MemberDocumentInline(TabularInline):
     model = MemberDocument
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     verbose_name = "Member Document / የአባል ሰነድ"
     verbose_name_plural = "Member Documents / የአባል ሰነዶች እና መታወቂያ"
     fields = ("document_type", "document_title", "file", "download_link", "uploaded_at", "uploaded_by")
@@ -78,6 +82,8 @@ class MemberDocumentInline(TabularInline):
 class MemberNoteInline(StackedInline):
     model = MemberNote
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     verbose_name = "Member Note / ማስታወሻ"
     verbose_name_plural = "Member Notes / ማስታወሻዎች"
     fields = ("category", "note", "created_by", "created_at")
@@ -112,6 +118,8 @@ class MemberStatusHistoryInline(TabularInline):
     model = MemberStatusHistory
     extra = 0
     can_delete = False
+    classes = ("collapse",)
+    collapsible = True
     verbose_name = "Status History / የሁኔታ ታሪክ"
     verbose_name_plural = "Status History / የሁኔታ ታሪክ"
     fields = ("previous_status", "new_status", "reason", "changed_by", "changed_at")
@@ -154,6 +162,7 @@ class MemberAdmin(ModelAdmin):
 
     add_fieldsets = (
         ("Personal & Identity / የግል እና መታወቂያ መረጃ", {
+            "classes": ("collapse",),
             "description": "Enter the member's legal name, demographic details, and profile photo.",
             "fields": (
                 "photo",
@@ -162,6 +171,7 @@ class MemberAdmin(ModelAdmin):
             ),
         }),
         ("Contact Information / የእውቂያ እና አድራሻ መረጃ", {
+            "classes": ("collapse",),
             "description": "Primary Ethiopian mobile number (+251), alternate contact, and residential address.",
             "fields": (
                 ("phone", "alternative_phone"),
@@ -170,6 +180,7 @@ class MemberAdmin(ModelAdmin):
             ),
         }),
         ("Gym Registration & Membership / የጂም ምዝገባ እና አባልነት", {
+            "classes": ("collapse",),
             "description": "Home branch assignment, membership acquisition channel, and duplicate checking.",
             "fields": (
                 "home_branch",
@@ -181,6 +192,7 @@ class MemberAdmin(ModelAdmin):
 
     fieldsets = (
         ("Personal & Identity / የግል እና መታወቂያ መረጃ", {
+            "classes": ("collapse",),
             "description": "Member's legal identity, gender, date of birth, and photo profile.",
             "fields": (
                 "photo",
@@ -189,6 +201,7 @@ class MemberAdmin(ModelAdmin):
             ),
         }),
         ("Contact Information / የእውቂያ እና አድራሻ መረጃ", {
+            "classes": ("collapse",),
             "description": "Contact details and physical residence.",
             "fields": (
                 ("phone", "alternative_phone"),
@@ -197,6 +210,7 @@ class MemberAdmin(ModelAdmin):
             ),
         }),
         ("Gym Registration & Membership / የጂም ምዝገባ እና አባልነት", {
+            "classes": ("collapse",),
             "description": "Assigned home branch, digital QR access token, status, and join date.",
             "fields": (
                 ("member_number", "home_branch"),

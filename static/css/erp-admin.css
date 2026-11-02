@@ -1104,7 +1104,7 @@ body.overflow-hidden {
 
 /* Fieldset and Inline Headings with Right Chevron */
 .change-form fieldset.module > h2,
-.change-form fieldset.module > details > summary h2,
+.change-form fieldset.module details summary h2,
 .change-form .inline-group > h2,
 .change-form .inline-heading {
   background: var(--erp-form-header-bg) !important;
@@ -1128,7 +1128,7 @@ body.overflow-hidden {
 
 /* Chevron caret icon on the right of the header */
 .change-form fieldset.module > h2::after,
-.change-form fieldset.module > details > summary h2::after,
+.change-form fieldset.module details summary h2::after,
 .change-form .inline-group > h2::after,
 .change-form .inline-heading::after {
   content: '⌄' !important; /* Default collapsed chevron pointing down */
@@ -1140,18 +1140,25 @@ body.overflow-hidden {
 }
 
 /* When expanded, chevron points up */
-.change-form fieldset.module.erp-expanded > h2::after,
-.change-form fieldset.module.erp-expanded > details > summary h2::after,
-.change-form .inline-group.erp-expanded > h2::after,
-.change-form fieldset.module details[open] > summary h2::after {
+.change-form fieldset.module details[open] summary h2::after,
+.change-form .inline-group details[open] summary h2::after {
   content: '⌃' !important;
 }
 
-/* When explicitly collapsed, ensure rounded corners on all sides */
-.change-form fieldset.module.erp-collapsed > h2,
-.change-form fieldset.module.erp-collapsed .inline-heading {
+/* When collapsed (details not open), remove header border-bottom and round all corners */
+.change-form fieldset.module details:not([open]) summary h2,
+.change-form .inline-group details:not([open]) summary h2 {
   border-bottom: none !important;
   border-radius: var(--erp-form-radius) !important;
+}
+
+/* Ensure details summary removes native arrow */
+.change-form fieldset.module details summary {
+  list-style: none !important;
+  cursor: pointer !important;
+}
+.change-form fieldset.module details summary::-webkit-details-marker {
+  display: none !important;
 }
 
 /* Section descriptions */
