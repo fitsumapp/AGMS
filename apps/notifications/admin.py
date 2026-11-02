@@ -28,6 +28,18 @@ class ProviderConfigAdmin(ModelAdmin):
     }
     readonly_fields = ("created_at", "updated_at")
 
+    fieldsets = (
+        ("Provider Gateway / የመልእክት አቅራቢ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "provider_type"),
+                ("sender_id", "branch"),
+                ("cost_per_sms_etb", "is_default", "is_active"),
+                ("api_url", "api_key"),
+            ),
+        }),
+    )
+
     def has_module_permission(self, request):
         return can_manage_provider_config(request.user)
 
@@ -50,6 +62,20 @@ class MessageTemplateAdmin(ModelAdmin):
     list_filter = ("category", "channel", "language", "is_active", "branch")
     search_fields = ("code", "name", "subject", "body")
     readonly_fields = ("created_at", "updated_at")
+
+    fieldsets = (
+        ("Template Details / የመልእክት ቅጽ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "code"),
+                ("category", "channel"),
+                ("language", "branch"),
+                "is_active",
+                "subject",
+                "body",
+            ),
+        }),
+    )
 
 
 @admin.register(NotificationPreference)
@@ -107,6 +133,29 @@ class NotificationMessageAdmin(ModelAdmin):
     readonly_fields = (
         "sent_at", "delivered_at", "failed_at", "provider_message_id",
         "provider_response", "error_message", "idempotency_key", "created_at", "updated_at"
+    )
+
+    fieldsets = (
+        ("Message Overview / የመልእክት አጠቃላይ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("channel", "status"),
+                ("category", "branch"),
+                ("recipient_member", "recipient_user"),
+                "recipient_address",
+                "subject",
+                "body",
+            ),
+        }),
+        ("Cost & Delivery Audit / ወጪ እና መላኪያ ኦዲት", {
+            "classes": ("collapse",),
+            "fields": (
+                ("segment_count", "estimated_cost_etb"),
+                ("sent_at", "delivered_at"),
+                ("failed_at", "error_message"),
+                ("provider_message_id", "idempotency_key"),
+            ),
+        }),
     )
 
     def get_queryset(self, request):

@@ -127,9 +127,9 @@ class TestMembershipAdminFormDesign:
     def test_package_admin_fieldsets(self):
         admin = site._registry[MembershipPackage]
         section_names = [f[0] for f in admin.fieldsets if f[0]]
-        assert "Package Identity" in section_names
-        assert "Duration & Pricing" in section_names
-        assert "Access & Freeze Policies" in section_names
+        assert any("Package Identity" in name for name in section_names)
+        assert any("Duration & Pricing" in name for name in section_names)
+        assert any("Access & Freeze Policies" in name for name in section_names)
 
     def test_package_add_renders_csrf(self, superuser):
         client = Client()
@@ -143,9 +143,9 @@ class TestMembershipAdminFormDesign:
     def test_membership_admin_fieldsets(self):
         admin = site._registry[Membership]
         section_names = [f[0] for f in admin.fieldsets if f[0]]
-        assert "Subscription Summary" in section_names
-        assert "Validity & Terms" in section_names
-        assert "Lifecycle & Cancellation" in section_names
+        assert any("Subscription Summary" in name for name in section_names)
+        assert any("Validity & Terms" in name for name in section_names)
+        assert any("Lifecycle & Cancellation" in name for name in section_names)
 
 
 @pytest.mark.django_db
@@ -155,16 +155,16 @@ class TestBillingAdminFormDesign:
     def test_invoice_admin_fieldsets(self):
         admin = site._registry[Invoice]
         section_names = [f[0] for f in admin.fieldsets if f[0]]
-        assert "Invoice Header" in section_names
-        assert "Financial Totals" in section_names
-        assert "Associated Subscriptions & Notes" in section_names
+        assert any("Invoice Header" in name for name in section_names)
+        assert any("Financial Totals" in name for name in section_names)
+        assert any("Associated Subscriptions & Notes" in name for name in section_names)
 
     def test_payment_admin_fieldsets(self):
         admin = site._registry[Payment]
         section_names = [f[0] for f in admin.fieldsets if f[0]]
-        assert "Payment Transaction" in section_names
-        assert "Verification & Verification Audit" in section_names
-        assert "Security & Audit Metadata" in section_names
+        assert any("Payment Transaction" in name for name in section_names)
+        assert any("Verification & Verification Audit" in name for name in section_names)
+        assert any("Security & Audit Metadata" in name for name in section_names)
 
     def test_invoice_add_renders_csrf(self, superuser):
         client = Client()

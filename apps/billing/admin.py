@@ -36,6 +36,8 @@ from .services import (
 class InvoiceItemInline(TabularInline):
     model = InvoiceItem
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = ("description", "item_type", "quantity", "unit_price", "discount_amount", "tax_amount", "line_total")
     readonly_fields = ("line_total",)
 
@@ -75,7 +77,8 @@ class InvoiceAdmin(ModelAdmin):
     inlines = [InvoiceItemInline]
 
     fieldsets = (
-        ("Invoice Header", {
+        ("Invoice Header / የደረሰኝ ራስጌ", {
+            "classes": ("collapse",),
             "description": "Invoice tracking number, recipient member, and branch context.",
             "fields": (
                 ("invoice_number", "branch"),
@@ -83,20 +86,22 @@ class InvoiceAdmin(ModelAdmin):
                 ("issue_date", "due_date"),
             ),
         }),
-        ("Financial Totals", {
+        ("Financial Totals / የክፍያ ድምር እና ቀሪ", {
+            "classes": ("collapse",),
             "description": "Calculated subtotal, discounts, tax, and outstanding balance in ETB.",
             "fields": (
                 ("subtotal", "total_amount"),
                 ("paid_amount", "balance_due"),
             ),
         }),
-        ("Associated Subscriptions & Notes", {
+        ("Associated Subscriptions & Notes / የተያያዙ አባልነቶች እና ማስታወሻዎች", {
+            "classes": ("collapse",),
             "fields": (
                 ("membership", "renewal"),
                 "notes",
             ),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
             "description": "System issuance and user timestamps.",
             "fields": (
@@ -282,7 +287,8 @@ class PaymentAdmin(ModelAdmin):
     )
 
     fieldsets = (
-        ("Payment Transaction", {
+        ("Payment Transaction / የክፍያ ዝውውር መረጃ", {
+            "classes": ("collapse",),
             "description": "Receipt number, associated invoice, amount, and payment method.",
             "fields": (
                 ("payment_number", "branch"),
@@ -291,7 +297,8 @@ class PaymentAdmin(ModelAdmin):
                 "transaction_reference",
             ),
         }),
-        ("Verification & Verification Audit", {
+        ("Verification & Verification Audit / ማረጋገጫ እና ቁጥጥር", {
+            "classes": ("collapse",),
             "description": "Verification authorization, collection staff, and notes.",
             "fields": (
                 ("received_by", "paid_at"),
@@ -299,7 +306,7 @@ class PaymentAdmin(ModelAdmin):
                 "notes",
             ),
         }),
-        ("Security & Audit Metadata", {
+        ("Security & Audit Metadata / የደህንነት እና ኦዲት መረጃ", {
             "classes": ("collapse",),
             "fields": (
                 "idempotency_key",
@@ -427,6 +434,23 @@ class PaymentMethodAdmin(ModelAdmin):
     list_filter = ("method_type", "is_active")
     search_fields = ("name", "code")
 
+    fieldsets = (
+        ("Method Identity / የክፍያ ዘዴ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "code"),
+                "method_type",
+            ),
+        }),
+        ("Policy & Controls / ደንቦች እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("requires_reference", "requires_verification"),
+                "is_active",
+            ),
+        }),
+    )
+
 
 @admin.register(Refund)
 class RefundAdmin(ModelAdmin):
@@ -458,7 +482,8 @@ class RefundAdmin(ModelAdmin):
     )
 
     fieldsets = (
-        ("Refund Request", {
+        ("Refund Request / የተመላሽ ጥያቄ መረጃ", {
+            "classes": ("collapse",),
             "description": "Refund tracking ID, linked payment, invoice, and reimbursable amount.",
             "fields": (
                 ("refund_number", "status"),
@@ -467,7 +492,8 @@ class RefundAdmin(ModelAdmin):
                 "reason",
             ),
         }),
-        ("Approval & Completion", {
+        ("Approval & Completion / የማጽደቅ እና የማጠናቀቅ ሂደት", {
+            "classes": ("collapse",),
             "description": "Manager authorization timestamps and completion audit.",
             "fields": (
                 ("requested_by", "approved_by"),
@@ -475,7 +501,7 @@ class RefundAdmin(ModelAdmin):
                 "completed_by",
             ),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
             "fields": (
                 ("created_at", "updated_at"),

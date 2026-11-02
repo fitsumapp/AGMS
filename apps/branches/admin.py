@@ -24,10 +24,32 @@ class BranchAdmin(BranchScopedAdmin):
     search_fields = ("code", "name", "city", "address")
     list_filter = ("is_active", "city")
     fieldsets = (
-        ("Identity", {"fields": ("code", "name", "description", "is_active", "opening_date")}),
-        ("Contact", {"fields": ("phone", "email", "address", "city")}),
-        ("Management", {"fields": ("manager",)}),
-        ("Audit", {"fields": ("created_at", "updated_at", "created_by", "updated_by")}),
+        ("Branch Identity / የቅርንጫፍ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("code", "name"),
+                ("is_active", "opening_date"),
+                "description",
+            ),
+        }),
+        ("Contact & Location / አድራሻ እና ግንኙነት", {
+            "classes": ("collapse",),
+            "fields": (
+                ("phone", "email"),
+                ("city", "address"),
+            ),
+        }),
+        ("Branch Leadership / አስተዳደር እና አመራር", {
+            "classes": ("collapse",),
+            "fields": ("manager",),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+                ("created_by", "updated_by"),
+            ),
+        }),
     )
 
     def get_queryset(self, request):
@@ -87,8 +109,22 @@ class UserBranchAccessAdmin(BranchScopedAdmin):
     search_fields = ("user__email", "branch__code", "branch__name")
     list_filter = ("is_active", "is_primary", "branch")
     readonly_fields = ("assigned_at", "assigned_by", "created_at", "updated_at")
-    fieldsets = (("Assignment", {"fields": ("user", "branch", "is_active", "is_primary")}),
-        ("Audit", {"fields": ("assigned_at", "assigned_by", "created_at", "updated_at")}))
+    fieldsets = (
+        ("Assignment / የተጠቃሚ የቅርንጫፍ ምደባ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("user", "branch"),
+                ("is_active", "is_primary"),
+            ),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("assigned_at", "assigned_by"),
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
 
     def has_module_permission(self, request):
         return is_owner(request.user)
@@ -140,23 +176,26 @@ class BranchSettingsAdmin(BranchScopedAdmin):
     search_fields = ("branch__code", "branch__name")
     list_filter = ("attendance_qr_enabled", "attendance_manual_enabled")
     fieldsets = (
-        ("Operating Schedule", {
+        ("Operating Schedule / የሥራ ሰዓት እና ቀናት", {
+            "classes": ("collapse",),
             "fields": ("branch", "operating_days", ("opens_at", "closes_at")),
         }),
-        ("Attendance & Entry Overrides", {
+        ("Attendance & Entry Overrides / የመግቢያ እና ምዝገባ ደንቦች", {
+            "classes": ("collapse",),
             "description": "Configure branch-specific access and verification rules. At least one attendance method must remain active.",
             "fields": (
                 ("attendance_qr_enabled", "attendance_manual_enabled"),
                 "allow_access_with_balance_override",
             ),
         }),
-        ("POS, Retail & Inventory Overrides", {
+        ("POS, Retail & Inventory Overrides / የሽያጭ እና ክምችት ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
-                "max_discount_percent_override",
-                "low_stock_threshold_override",
+                ("max_discount_percent_override", "low_stock_threshold_override"),
             ),
         }),
-        ("Facility & Operations Overrides", {
+        ("Facility & Operations Overrides / የተቋም እና አገልግሎት ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 "locker_deposit_etb_override",
                 "cleaning_inspection_frequency_hours",

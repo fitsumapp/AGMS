@@ -23,12 +23,16 @@ from .services import (
 class ClassScheduleExceptionInline(TabularInline):
     model = ClassScheduleException
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("exception_date", "reason", "is_cancelled")
 
 
 class ClassBookingInline(TabularInline):
     model = ClassBooking
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = (
         "member",
         "status",
@@ -56,6 +60,32 @@ class ClassTypeAdmin(ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
     filter_horizontal = ("applicable_branches",)
 
+    fieldsets = (
+        ("Class Identity / የስልጠና ዓይነት መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "slug"),
+                ("category", "difficulty_level"),
+                "description",
+            ),
+        }),
+        ("Capacity & Schedule Defaults / የሰዓት እና የቦታ መጠን", {
+            "classes": ("collapse",),
+            "fields": (
+                ("default_duration_minutes", "default_capacity"),
+                ("default_waitlist_capacity", "color_code"),
+                "is_active",
+            ),
+        }),
+        ("Branch Availability & Requirements / ቅርንጫፍ እና መስፈርቶች", {
+            "classes": ("collapse",),
+            "fields": (
+                "applicable_branches",
+                "trainer_qualifications",
+            ),
+        }),
+    )
+
 
 @admin.register(ClassScheduleTemplate)
 class ClassScheduleTemplateAdmin(ModelAdmin):
@@ -78,6 +108,26 @@ class ClassScheduleTemplateAdmin(ModelAdmin):
     )
     inlines = [ClassScheduleExceptionInline]
     actions = ["generate_sessions_action"]
+
+    fieldsets = (
+        ("Schedule Template / የስልጠና መርሃ-ግብር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("class_type", "branch"),
+                ("room", "trainer"),
+                ("day_of_week", "start_time", "end_time"),
+            ),
+        }),
+        ("Capacity & Booking Rules / የቦታ እና የቦታ ማስያዣ ደንቦች", {
+            "classes": ("collapse",),
+            "fields": (
+                ("capacity", "waitlist_capacity"),
+                ("booking_window_days_ahead", "booking_cutoff_minutes"),
+                ("cancellation_cutoff_minutes", "is_active"),
+                ("start_date", "end_date"),
+            ),
+        }),
+    )
 
     def time_slot(self, obj):
         return f"{obj.start_time.strftime('%H:%M')} - {obj.end_time.strftime('%H:%M')}"
@@ -128,6 +178,27 @@ class ClassSessionAdmin(ModelAdmin):
     )
     inlines = [ClassBookingInline]
     actions = ["mark_completed_action", "cancel_sessions_action"]
+
+    fieldsets = (
+        ("Session Information / የስልጠና ክፍል መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("class_type", "branch"),
+                ("room", "trainer"),
+                ("session_date", "start_time", "end_time"),
+                ("capacity", "waitlist_capacity"),
+                "status",
+            ),
+        }),
+        ("Booking Window & Notes / የምዝገባ ሰዓት እና ማስታወሻ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("booking_opens_at", "booking_closes_at"),
+                ("cancellation_reason", "cancelled_by", "cancelled_at"),
+                "notes",
+            ),
+        }),
+    )
 
     def class_name_display(self, obj):
         color = obj.class_type.color_code or "#10b981"
@@ -207,6 +278,25 @@ class ClassBookingAdmin(ModelAdmin):
         "mark_noshow_action",
         "cancel_bookings_action",
     ]
+
+    fieldsets = (
+        ("Booking Details / የቦታ ማስያዣ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("session", "member"),
+                ("membership", "status"),
+                ("waitlist_position", "notes"),
+            ),
+        }),
+        ("Audit Timestamps / የሰዓት መዝገብ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("booked_at", "booked_by"),
+                ("attendance_marked_at", "attendance_marked_by"),
+                ("cancellation_reason", "cancelled_at", "cancelled_by"),
+            ),
+        }),
+    )
 
     def member_display(self, obj):
         return f"{obj.member.full_name} ({obj.member.member_number})"

@@ -41,6 +41,8 @@ from .services import (
 class PackageBranchInline(TabularInline):
     model = PackageBranch
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("branch", "is_enabled")
 
 
@@ -61,21 +63,24 @@ class MembershipPackageAdmin(ModelAdmin):
     inlines = [PackageBranchInline]
 
     fieldsets = (
-        ("Package Identity", {
+        ("Package Identity / የጥቅል መረጃ", {
+            "classes": ("collapse",),
             "description": "Unique plan code, commercial name, and member-facing description.",
             "fields": (
                 ("code", "name"),
                 "description",
             ),
         }),
-        ("Duration & Pricing", {
+        ("Duration & Pricing / የቆይታ ጊዜ እና ዋጋ", {
+            "classes": ("collapse",),
             "description": "Subscription length, recurring billing unit, and price in local ETB currency.",
             "fields": (
                 ("duration_value", "duration_unit"),
                 ("price", "currency"),
             ),
         }),
-        ("Access & Freeze Policies", {
+        ("Access & Freeze Policies / የመግቢያ እና የማቆያ ደንቦች", {
+            "classes": ("collapse",),
             "description": "Multi-branch facility access rules and suspension / freeze allowances.",
             "fields": (
                 ("cross_branch_enabled", "freeze_allowed"),
@@ -116,6 +121,8 @@ class MembershipRenewalInline(TabularInline):
     model = MembershipRenewal
     extra = 0
     can_delete = False
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = (
         "previous_end_date",
         "new_end_date",
@@ -135,6 +142,8 @@ class MembershipFreezeInline(TabularInline):
     model = MembershipFreeze
     extra = 0
     can_delete = False
+    classes = ("collapse",)
+    collapsible = True
     fields = (
         "requested_start_date",
         "requested_end_date",
@@ -154,6 +163,8 @@ class MembershipAdjustmentInline(TabularInline):
     model = MembershipAdjustment
     extra = 0
     can_delete = False
+    classes = ("collapse",)
+    collapsible = True
     fields = ("adjustment_type", "previous_value", "new_value", "reason", "approved_by", "created_at")
     readonly_fields = fields
 
@@ -165,6 +176,8 @@ class MembershipEventInline(TabularInline):
     model = MembershipEvent
     extra = 0
     can_delete = False
+    classes = ("collapse",)
+    collapsible = True
     fields = ("event_type", "actor", "timestamp", "metadata")
     readonly_fields = fields
 
@@ -237,7 +250,8 @@ class MembershipAdmin(ModelAdmin):
     )
 
     fieldsets = (
-        ("Subscription Summary", {
+        ("Subscription Summary / የአባልነት አጠቃላይ መረጃ", {
+            "classes": ("collapse",),
             "description": "Agreement identifiers, assigned member profile, and package tier.",
             "fields": (
                 ("membership_number", "home_branch"),
@@ -245,7 +259,8 @@ class MembershipAdmin(ModelAdmin):
                 ("status", "payment_clearance_status"),
             ),
         }),
-        ("Validity & Terms", {
+        ("Validity & Terms / የቆይታ ጊዜ እና ሁኔታዎች", {
+            "classes": ("collapse",),
             "description": "Subscription start/end dates, visit allowances, and historical price snapshot.",
             "fields": (
                 ("start_date", "end_date"),
@@ -254,14 +269,15 @@ class MembershipAdmin(ModelAdmin):
                 "cross_branch_snapshot",
             ),
         }),
-        ("Lifecycle & Cancellation", {
+        ("Lifecycle & Cancellation / የሂደት እና የስረዛ ሁኔታ", {
+            "classes": ("collapse",),
             "description": "Activation timestamps and cancellation records.",
             "fields": (
                 ("activation_status", "activated_at"),
                 ("cancelled_at", "cancellation_reason"),
             ),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
             "description": "Creation and last modification tracking.",
             "fields": (

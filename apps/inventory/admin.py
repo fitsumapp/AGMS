@@ -52,42 +52,56 @@ from .services import (
 class StockBatchInline(TabularInline):
     model = StockBatch
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = ("batch_number", "quantity", "expiry_date", "cost_price", "received_date")
 
 
 class PurchaseOrderItemInline(TabularInline):
     model = PurchaseOrderItem
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("product", "quantity_ordered", "quantity_received", "unit_cost", "total_cost")
 
 
 class GoodsReceivedItemInline(TabularInline):
     model = GoodsReceivedItem
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("product", "po_item", "quantity_received", "unit_cost", "total_cost", "batch_number", "expiry_date")
 
 
 class StockTransferItemInline(TabularInline):
     model = StockTransferItem
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("product", "quantity_sent", "quantity_received")
 
 
 class StockAdjustmentItemInline(TabularInline):
     model = StockAdjustmentItem
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("product", "quantity_change", "unit_cost", "total_cost", "reason_detail")
 
 
 class StockCountItemInline(TabularInline):
     model = StockCountItem
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = ("product", "system_quantity", "counted_quantity", "variance", "unit_cost", "variance_cost", "notes")
 
 
 class SaleItemInline(TabularInline):
     model = SaleItem
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = ("product", "quantity", "returned_quantity", "unit_price", "discount_amount", "tax_amount", "total_price")
     can_delete = False
 
@@ -95,6 +109,8 @@ class SaleItemInline(TabularInline):
 class SalePaymentInline(TabularInline):
     model = SalePayment
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = ("payment_method", "amount", "tendered_amount", "change_amount", "reference", "is_verified", "verified_at")
     can_delete = False
 
@@ -102,6 +118,8 @@ class SalePaymentInline(TabularInline):
 class SaleReturnInline(TabularInline):
     model = SaleReturn
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = ("return_number", "reason", "refund_amount", "refund_method", "restock_items", "status", "returned_at")
     can_delete = False
 
@@ -109,6 +127,8 @@ class SaleReturnInline(TabularInline):
 class PosSettledPaymentInline(TabularInline):
     model = PosSettledPayment
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = ("payment", "amount")
     can_delete = False
 
@@ -116,6 +136,8 @@ class PosSettledPaymentInline(TabularInline):
 class PosSettledReturnInline(TabularInline):
     model = PosSettledReturn
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     readonly_fields = ("sale_return", "amount")
     can_delete = False
 
@@ -129,6 +151,17 @@ class ProductCategoryAdmin(ModelAdmin):
     list_display = ("name", "code", "parent", "is_active_badge")
     list_filter = ("is_active",)
     search_fields = ("name", "code")
+
+    fieldsets = (
+        ("Category Details / የምድብ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "code"),
+                ("parent", "is_active"),
+                "description",
+            ),
+        }),
+    )
 
     @display(description="Status", boolean=True)
     def is_active_badge(self, obj):
@@ -152,6 +185,34 @@ class ProductAdmin(ModelAdmin):
     list_filter = ("category", "unit_of_measurement", "is_active", "tracks_expiry")
     search_fields = ("name", "sku", "barcode")
     filter_horizontal = ("branches",)
+
+    fieldsets = (
+        ("Product Identity / የዕቃው መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "product_number"),
+                ("sku", "barcode"),
+                ("category", "unit_of_measurement"),
+                "description",
+                "image",
+            ),
+        }),
+        ("Pricing & Taxation / ዋጋ እና ታክስ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("selling_price", "cost_price"),
+                ("tax_rate", "is_tax_inclusive"),
+            ),
+        }),
+        ("Inventory & Branch Controls / የክምችት እና ቅርንጫፍ ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("low_stock_threshold", "tracks_expiry"),
+                "is_active",
+                "branches",
+            ),
+        }),
+    )
 
     @display(description="Selling Price")
     def selling_price_display(self, obj):
@@ -180,6 +241,18 @@ class StockItemAdmin(ModelAdmin):
     list_filter = ("branch", "product__category")
     search_fields = ("product__name", "product__sku", "branch__name")
     inlines = [StockBatchInline]
+
+    fieldsets = (
+        ("Stock Summary / የክምችት አጠቃላይ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("product", "branch"),
+                ("quantity_on_hand", "quantity_reserved"),
+                ("average_cost_price", "last_cost_price"),
+                "reorder_level",
+            ),
+        }),
+    )
 
     @display(description="On Hand")
     def quantity_on_hand_display(self, obj):
@@ -273,6 +346,32 @@ class PurchaseOrderAdmin(ModelAdmin):
     search_fields = ("po_number", "supplier__name")
     inlines = [PurchaseOrderItemInline]
     actions = ["action_submit", "action_approve"]
+
+    fieldsets = (
+        ("Purchase Order / የግዢ ትዕዛዝ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("po_number", "branch"),
+                ("supplier", "status"),
+                ("order_date", "expected_delivery_date"),
+                "notes",
+            ),
+        }),
+        ("Financial Totals / የክፍያ ድምር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("subtotal", "tax_amount"),
+                "total_amount",
+            ),
+        }),
+        ("Approval Audit / ማጽደቂያ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_by", "approved_by"),
+                "approved_at",
+            ),
+        }),
+    )
 
     @display(description="Total")
     def total_amount_display(self, obj):
@@ -461,6 +560,25 @@ class CashierShiftAdmin(ModelAdmin):
     list_filter = ("status", "branch", "opened_at")
     search_fields = ("shift_number", "cashier__username", "cashier__first_name")
 
+    fieldsets = (
+        ("Cashier Shift / የካሼር ፈረቃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("shift_number", "branch"),
+                ("cashier", "status"),
+                ("opened_at", "closed_at"),
+            ),
+        }),
+        ("Cash Reconciliation / የገንዘብ ማስታረቂያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("opening_float", "expected_cash"),
+                ("declared_cash", "cash_variance"),
+                "closing_notes",
+            ),
+        }),
+    )
+
     @display(description="Status")
     def status_badge(self, obj):
         color = "bg-emerald-100 text-emerald-800" if obj.status == CashierShift.Status.OPEN else "bg-base-200 text-base-800"
@@ -500,6 +618,30 @@ class SaleAdmin(ModelAdmin):
     list_filter = ("status", "payment_status", "branch", "completed_at")
     search_fields = ("sale_number", "customer_name", "customer_phone")
     inlines = [SaleItemInline, SalePaymentInline, SaleReturnInline]
+
+    fieldsets = (
+        ("Sale Header / የሽያጭ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("sale_number", "branch"),
+                ("cashier", "shift"),
+                ("member", "customer_name"),
+                ("customer_phone", "status"),
+                "payment_status",
+            ),
+        }),
+        ("Financial Totals / የሽያጭ ሂሳብ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("subtotal", "tax_amount"),
+                ("discount_amount", "discount_reason"),
+                "discount_authorized_by",
+                ("total_amount", "paid_amount"),
+                "change_amount",
+                "notes",
+            ),
+        }),
+    )
 
     @display(description="Total")
     def total_amount_display(self, obj):

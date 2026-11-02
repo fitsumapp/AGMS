@@ -20,12 +20,45 @@ class UserAdmin(SuperuserOnlyMixin, BaseUserAdmin, ModelAdmin):
     search_fields = ("email", "first_name", "last_name")
     readonly_fields = ("last_login", "date_joined", "created_at", "updated_at")
     fieldsets = (
-        (None, {"fields": ("email", "password")}),
-        ("Personal information", {"fields": ("first_name", "last_name", "phone")}),
-        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
-        ("Dates", {"fields": ("last_login", "date_joined", "created_at", "updated_at")}),
+        ("Account Credentials / የተጠቃሚ ምስክር ወረቀት", {
+            "classes": ("collapse",),
+            "fields": (
+                ("email", "password"),
+            ),
+        }),
+        ("Personal Information / የግል መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("first_name", "last_name"),
+                "phone",
+            ),
+        }),
+        ("Permissions & Roles / ፈቃዶች እና ሚናዎች", {
+            "classes": ("collapse",),
+            "fields": (
+                ("is_active", "is_staff", "is_superuser"),
+                "groups",
+                "user_permissions",
+            ),
+        }),
+        ("Activity Dates / የቀን መረጃዎች", {
+            "classes": ("collapse",),
+            "fields": (
+                ("last_login", "date_joined"),
+                ("created_at", "updated_at"),
+            ),
+        }),
     )
-    add_fieldsets = ((None, {"classes": ("wide",), "fields": ("email", "first_name", "last_name", "password1", "password2")}),)
+    add_fieldsets = (
+        ("Account Creation / አዲስ ተጠቃሚ መፍጠር", {
+            "classes": ("collapse",),
+            "fields": (
+                "email",
+                ("first_name", "last_name"),
+                ("password1", "password2"),
+            ),
+        }),
+    )
 
 admin.site.unregister(Group)
 @admin.register(Group)
@@ -41,8 +74,28 @@ class StaffAccountAdmin(ModelAdmin):
     search_fields = ("email", "first_name", "last_name")
     list_filter = ("is_active",)
     ordering = ("email",)
-    fieldsets = (("Identity", {"fields": ("email", "first_name", "last_name", "phone", "is_active", "role")}),)
-    add_fieldsets = (("New staff account", {"fields": ("email", "first_name", "last_name", "phone", "password1", "password2", "role")}),)
+    fieldsets = (
+        ("Staff Identity & Role / የሰራተኛ መለያ እና ሚና", {
+            "classes": ("collapse",),
+            "fields": (
+                "email",
+                ("first_name", "last_name"),
+                ("phone", "role"),
+                "is_active",
+            ),
+        }),
+    )
+    add_fieldsets = (
+        ("New Staff Account / አዲስ የሰራተኛ አካውንት", {
+            "classes": ("collapse",),
+            "fields": (
+                "email",
+                ("first_name", "last_name"),
+                ("phone", "role"),
+                ("password1", "password2"),
+            ),
+        }),
+    )
     change_form_template = "admin/change_form.html"
 
     def get_fieldsets(self, request, obj=None):

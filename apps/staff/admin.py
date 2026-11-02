@@ -20,6 +20,8 @@ from .models import (
 class StaffDocumentInline(TabularInline):
     model = StaffDocument
     extra = 1
+    classes = ("collapse",)
+    collapsible = True
     fields = ("title", "document_type", "file", "download_link", "uploaded_at", "uploaded_by")
     readonly_fields = ("download_link", "uploaded_at")
 
@@ -83,6 +85,39 @@ class StaffProfileAdmin(ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
     actions = ["terminate_selected_staff"]
 
+    fieldsets = (
+        ("Staff Identity / የሰራተኛ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("employee_number", "user"),
+                ("primary_branch", "job_title"),
+                ("department", "employment_type"),
+                ("employment_status", "hire_date"),
+                "photo",
+            ),
+        }),
+        ("Emergency Contacts / የአደጋ ጊዜ ተጠሪ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("emergency_contact_name", "emergency_contact_phone"),
+                "emergency_contact_relation",
+            ),
+        }),
+        ("Qualifications & Notes / የትምህርት ዝግጅት እና ማስታወሻ", {
+            "classes": ("collapse",),
+            "fields": (
+                "qualifications",
+                "notes",
+            ),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
+
     @admin.action(description="Terminate employment and revoke staff access for selected employees")
     def terminate_selected_staff(self, request, queryset):
         from .services import terminate_staff
@@ -126,6 +161,29 @@ class TrainerProfileAdmin(ModelAdmin):
     )
     readonly_fields = ("created_at", "updated_at")
 
+    fieldsets = (
+        ("Trainer Profile / የአሰልጣኝ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("staff", "status"),
+                ("experience_years", "hourly_rate"),
+                ("max_active_clients", "specializations"),
+                "certifications",
+                "bio",
+            ),
+        }),
+        ("Availability Schedule / የስራ ሰዓት ፕሮግራም", {
+            "classes": ("collapse",),
+            "fields": ("availability_schedule",),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("staff__user", "staff__primary_branch")
         if is_owner(request.user) or request.user.is_superuser:
@@ -153,6 +211,18 @@ class TrainerMemberAssignmentAdmin(ModelAdmin):
         "member__member_number",
     )
     actions = ["mark_completed", "mark_cancelled"]
+
+    fieldsets = (
+        ("Trainer Assignment / የአሰልጣኝ እና አባል ምደባ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("trainer", "member"),
+                ("branch", "status"),
+                ("start_date", "end_date"),
+                "notes",
+            ),
+        }),
+    )
 
     @admin.action(description="Mark selected assignments as Completed")
     def mark_completed(self, request, queryset):
@@ -199,6 +269,25 @@ class TrainingSessionAdmin(ModelAdmin):
     )
     actions = ["complete_sessions", "cancel_sessions"]
 
+    fieldsets = (
+        ("Session Schedule / የስልጠና ሰዓት እና ቀን", {
+            "classes": ("collapse",),
+            "fields": (
+                ("trainer", "member"),
+                ("branch", "assignment"),
+                ("session_date", "start_time", "end_time"),
+                ("session_type", "status"),
+            ),
+        }),
+        ("Session Notes & Cancellation / ማስታወሻ እና ስረዛ", {
+            "classes": ("collapse",),
+            "fields": (
+                "trainer_notes",
+                "cancellation_reason",
+            ),
+        }),
+    )
+
     @admin.action(description="Mark selected sessions as Completed")
     def complete_sessions(self, request, queryset):
         count = 0
@@ -234,6 +323,17 @@ class ShiftTemplateAdmin(ModelAdmin):
     list_filter = ("branch", "is_active")
     search_fields = ("name", "branch__name", "branch__code")
 
+    fieldsets = (
+        ("Shift Template / የፈረቃ ቅጽ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "branch"),
+                ("start_time", "end_time"),
+                "is_active",
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("branch")
         if is_owner(request.user) or request.user.is_superuser:
@@ -262,6 +362,19 @@ class StaffShiftAdmin(ModelAdmin):
         "branch__name",
     )
     actions = ["mark_completed", "mark_absent", "mark_cancelled"]
+
+    fieldsets = (
+        ("Staff Shift / የሰራተኛ ፈረቃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("staff", "branch"),
+                ("shift_template", "date"),
+                ("start_time", "end_time"),
+                ("is_rest_day", "status"),
+                "notes",
+            ),
+        }),
+    )
 
     @admin.action(description="Mark selected shifts as Completed")
     def mark_completed(self, request, queryset):
@@ -308,6 +421,24 @@ class LeaveRequestAdmin(ModelAdmin):
         "reason",
     )
     actions = ["approve_leaves", "reject_leaves"]
+
+    fieldsets = (
+        ("Leave Request / የፈቃድ ጥያቄ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("staff", "leave_type"),
+                ("start_date", "end_date"),
+                ("status", "reason"),
+            ),
+        }),
+        ("Review & Approval / ማረጋገጫ እና ማጽደቅ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("reviewed_by", "reviewed_at"),
+                "rejection_reason",
+            ),
+        }),
+    )
 
     @admin.action(description="Approve selected leave requests")
     def approve_leaves(self, request, queryset):

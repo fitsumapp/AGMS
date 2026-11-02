@@ -71,6 +71,36 @@ class AttendanceAdmin(ModelAdmin):
         "updated_at",
     )
 
+    fieldsets = (
+        ("Attendance Record / የዕለታዊ መግቢያ መዝገብ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("member", "membership"),
+                ("branch", "status"),
+            ),
+        }),
+        ("Timestamps & Duration / የመግቢያና መውጫ ሰዓታት", {
+            "classes": ("collapse",),
+            "fields": (
+                ("check_in_datetime", "check_out_datetime"),
+                ("check_in_method", "check_out_method"),
+            ),
+        }),
+        ("Device & Staff Audit / የመሳሪያ እና የሰራተኛ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("recorded_by", "access_device"),
+                "notes",
+            ),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related(
             "member", "branch", "membership", "membership__package", "recorded_by"
@@ -539,6 +569,24 @@ class MemberCredentialAdmin(ModelAdmin):
     search_fields = ("member__member_number", "member__first_name", "member__last_name")
     readonly_fields = ("member", "token_hash", "issued_date", "revoked_date", "revoked_reason", "issued_by")
 
+    fieldsets = (
+        ("Credential Details / የመታወቂያ ፈቃድ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("member", "credential_type"),
+                "token_hash",
+            ),
+        }),
+        ("Validity & Status / ተፈጻሚነት እና ሁኔታ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("issued_date", "expiry_date"),
+                ("revoked_date", "revoked_reason"),
+                "issued_by",
+            ),
+        }),
+    )
+
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("member", "member__home_branch", "issued_by")
         if is_owner(request.user) or request.user.is_superuser:
@@ -653,6 +701,17 @@ class AccessDeviceAdmin(ModelAdmin):
     list_display = ("device_name", "device_code", "branch", "device_type", "status_badge", "last_seen")
     list_filter = ("device_type", "status", "branch")
     search_fields = ("device_name", "device_code", "branch__name")
+
+    fieldsets = (
+        ("Device Identity / የመሳሪያው መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("device_name", "device_code"),
+                ("branch", "device_type"),
+                "status",
+            ),
+        }),
+    )
 
     @display(description="Status")
     def status_badge(self, obj):

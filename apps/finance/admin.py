@@ -81,6 +81,26 @@ class SupplierAdmin(ModelAdmin):
     list_filter = ("supplier_type", "is_active", "branch")
     search_fields = ("name", "contact_person", "phone", "email", "tax_identification_number")
 
+    fieldsets = (
+        ("Supplier Identity / የአቅራቢ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "supplier_type"),
+                ("contact_person", "phone"),
+                ("email", "tax_identification_number"),
+                ("branch", "is_active"),
+                "address",
+            ),
+        }),
+        ("Banking & Notes / የባንክ እና ማስታወሻ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("bank_name", "bank_account_number"),
+                "notes",
+            ),
+        }),
+    )
+
     @display(description="Supplier Type")
     def supplier_type_badge(self, obj):
         return obj.get_supplier_type_display()
@@ -118,6 +138,26 @@ class FinancialAccountAdmin(ModelAdmin):
     )
     list_filter = ("account_type", "is_active", "branch")
     search_fields = ("name", "bank_name", "account_number")
+
+    fieldsets = (
+        ("Account Identity / የሂሳብ መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "account_type"),
+                ("branch", "currency"),
+                ("bank_name", "account_number"),
+                ("is_active", "allow_negative"),
+                "description",
+            ),
+        }),
+        ("Balances / ቀሪ እና መነሻ ሂሳብ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("opening_balance", "opening_date"),
+                "current_balance",
+            ),
+        }),
+    )
 
     @display(description="Type")
     def account_type_badge(self, obj):
@@ -167,6 +207,33 @@ class ExpenseAdmin(ModelAdmin):
     search_fields = ("reference", "description", "supplier__name")
     actions = ["submit_for_approval_action", "approve_expense_action"]
     date_hierarchy = "expense_date"
+
+    fieldsets = (
+        ("Expense Record / የወጪ መዝገብ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("reference", "branch"),
+                ("category", "supplier"),
+                ("expense_date", "payment_due_date"),
+                "description",
+            ),
+        }),
+        ("Financial Totals / የወጪ ድምር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("amount", "tax_amount"),
+                ("total_amount", "currency"),
+                ("paid_amount", "balance_due"),
+            ),
+        }),
+        ("Approval & Status / ማረጋገጫ እና ሁኔታ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("approval_status", "payment_status"),
+                ("receipt_attachment", "internal_notes"),
+            ),
+        }),
+    )
 
     @display(description="Total")
     def total_amount_display(self, obj):

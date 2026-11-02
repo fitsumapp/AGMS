@@ -54,48 +54,55 @@ class GymProfileAdmin(FoundationAdmin):
     list_display = ("name", "default_currency", "default_timezone", "tax_id", "default_language")
     search_fields = ("name", "legal_name", "tax_id", "commercial_registration_number")
     fieldsets = (
-        ("Legal & Commercial Identity", {
+        ("Legal & Commercial Identity / የድርጅቱ ሕጋዊና ንግድ መለያ", {
+            "classes": ("collapse",),
             "fields": (
-                "name",
-                "legal_name",
+                ("name", "legal_name"),
                 ("tax_id", "commercial_registration_number"),
                 ("phone", "email"),
-                "website",
-                "address",
+                ("website", "address"),
             ),
         }),
-        ("Branding & Assets", {
+        ("Branding & Assets / ብራንዲንግ እና አርማ", {
+            "classes": ("collapse",),
             "fields": (
                 ("logo", "favicon"),
                 "default_language",
             ),
         }),
-        ("Receipt & Invoice Customization", {
+        ("Receipt & Invoice Customization / ደረሰኝ እና የሂሳብ መጠየቂያ ማስተካከያ", {
+            "classes": ("collapse",),
             "fields": (
                 "receipt_header",
                 "receipt_footer",
                 "invoice_terms",
             ),
         }),
-        ("Financial & Regional Defaults", {
+        ("Financial & Regional Defaults / የፋይናንስ እና የክልል ነባሪዎች", {
+            "classes": ("collapse",),
             "fields": (
                 ("default_currency", "default_timezone"),
                 "fiscal_year_start_month",
             ),
         }),
-        ("Member Registration Defaults", {
+        ("Member Registration Defaults / የአባል ምዝገባ ነባሪዎች", {
+            "classes": ("collapse",),
             "fields": (
                 ("member_id_prefix", "member_id_sequence_length"),
-                ("min_member_age", "require_emergency_contact", "require_member_photo"),
+                ("min_member_age", "require_emergency_contact"),
+                "require_member_photo",
             ),
         }),
-        ("Terms & Privacy Policy", {
+        ("Terms & Privacy Policy / የውል እና የግላዊነት ደንቦች", {
             "classes": ("collapse",),
             "fields": ("terms_and_conditions", "privacy_policy"),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
-            "fields": ("created_at", "updated_at", "created_by", "updated_by"),
+            "fields": (
+                ("created_at", "updated_at"),
+                ("created_by", "updated_by"),
+            ),
         }),
     )
 
@@ -138,54 +145,62 @@ class GymSettingsAdmin(FoundationAdmin):
         "membership_freeze_enabled",
     )
     fieldsets = (
-        ("Facility Profile", {
+        ("Facility Profile / የተቋም መረጃ", {
+            "classes": ("collapse",),
             "fields": ("profile",),
         }),
-        ("Attendance Configuration", {
+        ("Attendance Configuration / የመግቢያ እና ምዝገባ ማዋቀሪያ", {
+            "classes": ("collapse",),
             "description": "Configure authorized member entry verification methods. At least one method must remain active gym-wide.",
             "fields": (
                 ("attendance_qr_enabled", "attendance_manual_enabled"),
             ),
         }),
-        ("Membership & Branch Access Policies", {
+        ("Membership & Access Policies / የአባልነት እና መግቢያ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
-                "allow_access_with_balance",
-                "cross_branch_access_mode",
-                "membership_freeze_enabled",
-                "require_freeze_approval",
+                ("allow_access_with_balance", "cross_branch_access_mode"),
+                ("membership_freeze_enabled", "require_freeze_approval"),
                 "early_renewal_mode",
             ),
         }),
-        ("Billing & POS Policies", {
+        ("Billing & POS Policies / የክፍያ እና ሽያጭ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("invoice_due_days", "invoice_prefix", "receipt_prefix"),
                 ("cashier_shift_required", "pos_max_discount_percent"),
                 ("stock_adjustment_approval_required", "require_refund_approval"),
             ),
         }),
-        ("Notification & SMS Policies", {
+        ("Notification Policies / የማስታወቂያ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("sms_enabled", "email_enabled"),
                 ("sms_quiet_hours_start", "sms_quiet_hours_end"),
                 ("max_daily_sms_per_member", "membership_expiry_reminder_days"),
             ),
         }),
-        ("Staff & Class Policies", {
+        ("Staff & Class Policies / የሰራተኞች እና ስልጠና ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 "trainer_max_active_clients",
                 ("class_booking_window_days", "class_cancellation_cutoff_hours"),
                 ("class_waitlist_max_size", "staff_leave_manager_approval_required"),
             ),
         }),
-        ("Facility & Locker Policies", {
+        ("Facility & Locker Policies / የቁሳቁስ እና ሎከር ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("default_locker_deposit_etb", "lost_key_penalty_etb"),
                 ("facility_inspection_interval_days", "preventive_maintenance_lead_days"),
             ),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
-            "fields": ("created_at", "updated_at", "created_by", "updated_by"),
+            "fields": (
+                ("created_at", "updated_at"),
+                ("created_by", "updated_by"),
+            ),
         }),
     )
 
@@ -212,54 +227,62 @@ class GymPolicyAdmin(ModelAdmin):
         "membership_freeze_enabled",
     )
     fieldsets = (
-        ("Facility Profile", {
+        ("Facility Profile / የተቋም መረጃ", {
+            "classes": ("collapse",),
             "fields": ("profile",),
         }),
-        ("Attendance Configuration", {
+        ("Attendance Configuration / የመግቢያ እና ምዝገባ ማዋቀሪያ", {
+            "classes": ("collapse",),
             "description": "Configure authorized member entry verification methods. At least one method must remain active gym-wide.",
             "fields": (
                 ("attendance_qr_enabled", "attendance_manual_enabled"),
             ),
         }),
-        ("Membership & Branch Access Policies", {
+        ("Membership & Access Policies / የአባልነት እና መግቢያ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
-                "allow_access_with_balance",
-                "cross_branch_access_mode",
-                "membership_freeze_enabled",
-                "require_freeze_approval",
+                ("allow_access_with_balance", "cross_branch_access_mode"),
+                ("membership_freeze_enabled", "require_freeze_approval"),
                 "early_renewal_mode",
             ),
         }),
-        ("Billing & POS Policies", {
+        ("Billing & POS Policies / የክፍያ እና ሽያጭ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("invoice_due_days", "invoice_prefix", "receipt_prefix"),
                 ("cashier_shift_required", "pos_max_discount_percent"),
                 ("stock_adjustment_approval_required", "require_refund_approval"),
             ),
         }),
-        ("Notification & SMS Policies", {
+        ("Notification Policies / የማስታወቂያ ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("sms_enabled", "email_enabled"),
                 ("sms_quiet_hours_start", "sms_quiet_hours_end"),
                 ("max_daily_sms_per_member", "membership_expiry_reminder_days"),
             ),
         }),
-        ("Staff & Class Policies", {
+        ("Staff & Class Policies / የሰራተኞች እና ስልጠና ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 "trainer_max_active_clients",
                 ("class_booking_window_days", "class_cancellation_cutoff_hours"),
                 ("class_waitlist_max_size", "staff_leave_manager_approval_required"),
             ),
         }),
-        ("Facility & Locker Policies", {
+        ("Facility & Locker Policies / የቁሳቁስ እና ሎከር ደንቦች", {
+            "classes": ("collapse",),
             "fields": (
                 ("default_locker_deposit_etb", "lost_key_penalty_etb"),
                 ("facility_inspection_interval_days", "preventive_maintenance_lead_days"),
             ),
         }),
-        ("Audit Metadata", {
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
             "classes": ("collapse",),
-            "fields": ("created_at", "updated_at", "created_by", "updated_by"),
+            "fields": (
+                ("created_at", "updated_at"),
+                ("created_by", "updated_by"),
+            ),
         }),
     )
     readonly_fields = ("created_at", "updated_at", "created_by", "updated_by")

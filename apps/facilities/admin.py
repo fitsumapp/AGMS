@@ -61,6 +61,8 @@ class BranchScopedModelAdmin(ModelAdmin):
 class LockerInline(TabularInline):
     model = Locker
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = ("locker_number", "locker_type", "status", "lock_type", "daily_fee_etb", "monthly_fee_etb", "is_active")
     readonly_fields = ("status",)
 
@@ -68,6 +70,8 @@ class LockerInline(TabularInline):
 class LockerIncidentInline(TabularInline):
     model = LockerIncident
     extra = 0
+    classes = ("collapse",)
+    collapsible = True
     fields = ("incident_number", "incident_type", "penalty_fee_etb", "is_settled", "incident_date")
     readonly_fields = ("incident_number",)
 
@@ -78,6 +82,17 @@ class LockerZoneAdmin(BranchScopedModelAdmin):
     list_filter = ("branch", "gender_restriction", "is_active")
     search_fields = ("name", "code", "branch__name")
     inlines = [LockerInline]
+
+    fieldsets = (
+        ("Locker Zone / የሎከር ዞን መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("name", "code"),
+                ("branch", "gender_restriction"),
+                "is_active",
+            ),
+        }),
+    )
 
     @display(description=_("Lockers"))
     def lockers_count(self, obj):
@@ -101,6 +116,32 @@ class LockerAdmin(BranchScopedModelAdmin):
     list_filter = ("branch", "zone", "locker_type", "lock_type", "status", "is_active")
     search_fields = ("locker_number", "zone__name", "branch__name", "key_card_code")
     readonly_fields = ("created_at", "updated_at")
+
+    fieldsets = (
+        ("Locker Identity / የሎከር መለያ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("locker_number", "branch"),
+                ("zone", "locker_type"),
+                ("lock_type", "status"),
+                ("key_card_code", "is_active"),
+            ),
+        }),
+        ("Rental Fees & Deposits / የኪራይ ዋጋ እና ተቀማጭ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("daily_fee_etb", "monthly_fee_etb"),
+                "deposit_amount_etb",
+                "notes",
+            ),
+        }),
+        ("Audit Metadata / ኦዲት እና ቁጥጥር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("created_at", "updated_at"),
+            ),
+        }),
+    )
 
     @display(description=_("Status"))
     def status_badge(self, obj):
@@ -136,6 +177,27 @@ class LockerAssignmentAdmin(BranchScopedModelAdmin):
     readonly_fields = ("assignment_number", "returned_date", "created_at", "updated_at")
     inlines = [LockerIncidentInline]
     actions = ["action_release_lockers"]
+
+    fieldsets = (
+        ("Assignment Details / የሎከር ምደባ መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("assignment_number", "branch"),
+                ("locker", "member"),
+                ("assignment_type", "status"),
+                ("start_date", "end_date"),
+            ),
+        }),
+        ("Fees & Keys / ቁልፍ እና የክፍያ ሁኔታ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("fee_charged_etb", "deposit_charged_etb"),
+                ("deposit_refunded_etb", "deposit_status"),
+                ("key_issued", "key_returned"),
+                "notes",
+            ),
+        }),
+    )
 
     @display(description=_("Status"))
     def status_badge(self, obj):
@@ -214,6 +276,38 @@ class EquipmentAdmin(BranchScopedModelAdmin):
     list_filter = ("branch", "category", "status", "condition", "facility_area")
     search_fields = ("asset_code", "name", "manufacturer", "model_number", "serial_number")
     readonly_fields = ("total_downtime_hours", "created_at", "updated_at")
+
+    fieldsets = (
+        ("Equipment Asset / የዕቃው መለያ እና ሁኔታ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("asset_code", "name"),
+                ("branch", "facility_area"),
+                ("category", "status"),
+                ("condition", "is_active"),
+                "image",
+            ),
+        }),
+        ("Manufacturing & Purchase / ግዢ እና ዝርዝር", {
+            "classes": ("collapse",),
+            "fields": (
+                ("manufacturer", "model_number"),
+                ("serial_number", "supplier"),
+                ("purchase_date", "purchase_cost_etb"),
+                "warranty_expiry_date",
+            ),
+        }),
+        ("Maintenance & Assignment / ጥገና እና ምደባ", {
+            "classes": ("collapse",),
+            "fields": (
+                "assigned_staff",
+                ("last_maintenance_date", "next_maintenance_due"),
+                "total_downtime_hours",
+                "manual_document",
+                "notes",
+            ),
+        }),
+    )
 
     @display(description=_("Status"))
     def status_badge(self, obj):
@@ -295,6 +389,37 @@ class MaintenanceWorkOrderAdmin(BranchScopedModelAdmin):
     search_fields = ("work_order_number", "title", "equipment__asset_code", "equipment__name")
     readonly_fields = ("work_order_number", "reported_at", "started_at", "resolved_at", "closed_at", "created_at", "updated_at")
     actions = ["action_post_expense_to_finance"]
+
+    fieldsets = (
+        ("Work Order / የጥገና ትዕዛዝ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("work_order_number", "branch"),
+                ("equipment", "facility_area"),
+                ("order_type", "status"),
+                ("priority", "title"),
+                "description",
+            ),
+        }),
+        ("Technician & Dates / ባለሙያ እና ቀናት", {
+            "classes": ("collapse",),
+            "fields": (
+                ("reported_by", "reported_at"),
+                ("assigned_technician", "assigned_at"),
+                ("started_at", "resolved_at"),
+                "closed_at",
+            ),
+        }),
+        ("Costs & Resolution / ወጪ እና የውጤት መረጃ", {
+            "classes": ("collapse",),
+            "fields": (
+                ("service_cost_etb", "parts_cost_etb"),
+                ("total_cost_etb", "downtime_hours"),
+                "spare_parts_used",
+                "resolution_notes",
+            ),
+        }),
+    )
 
     @display(description=_("Status"))
     def status_badge(self, obj):
