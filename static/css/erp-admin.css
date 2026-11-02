@@ -47,7 +47,7 @@
   --erp-error-bg: #fef2f2;
   --erp-error-border: #fca5a5;
 
-  --erp-section-gap: 24px;
+  --erp-section-gap: 10px;
   --erp-field-gap: 16px;
 }
 
@@ -1069,14 +1069,20 @@ body.overflow-hidden {
 /* --------------------------------------------------------------------------
    8.2 Section Cards & Fieldset Elevation (Phase D - Accordion & Left Accent Stripe)
    -------------------------------------------------------------------------- */
+.change-form form > .flex.flex-col,
+.change-form form > div.flex.flex-col.gap-6 {
+  gap: 10px !important;
+}
+
 .change-form fieldset.module,
-.change-form .inline-group {
+.change-form .inline-group,
+.change-form [data-inline-type] {
   background: var(--erp-form-bg) !important;
   border: 1px solid var(--erp-form-border) !important;
   border-left: 5px solid #0284c7 !important; /* Vibrant Cyan/Blue Accent Stripe */
   border-radius: var(--erp-form-radius) !important;
   box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.04) !important;
-  margin-bottom: var(--erp-section-gap) !important;
+  margin-bottom: 0 !important;
   overflow: hidden !important;
   position: relative !important;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1097,12 +1103,31 @@ body.overflow-hidden {
 .change-form fieldset.module:nth-of-type(6) { border-left-color: #f43f5e !important; }
 
 /* Inline Formsets Sequential Border Accents */
-.change-form .inline-group:nth-of-type(1) { border-left-color: #f59e0b !important; }
-.change-form .inline-group:nth-of-type(2) { border-left-color: #8b5cf6 !important; }
-.change-form .inline-group:nth-of-type(3) { border-left-color: #10b981 !important; }
-.change-form .inline-group:nth-of-type(4) { border-left-color: #06b6d4 !important; }
+.change-form .inline-group:nth-of-type(1), .change-form [data-inline-type]:nth-of-type(1) { border-left-color: #f59e0b !important; }
+.change-form .inline-group:nth-of-type(2), .change-form [data-inline-type]:nth-of-type(2) { border-left-color: #8b5cf6 !important; }
+.change-form .inline-group:nth-of-type(3), .change-form [data-inline-type]:nth-of-type(3) { border-left-color: #10b981 !important; }
+.change-form .inline-group:nth-of-type(4), .change-form [data-inline-type]:nth-of-type(4) { border-left-color: #06b6d4 !important; }
 
-/* Fieldset and Inline Headings with Right Chevron */
+/* Details summary normalization */
+.change-form fieldset.module details > summary,
+.change-form details > summary {
+  list-style: none !important;
+  list-style-type: none !important;
+  position: relative !important;
+  display: block !important;
+  cursor: pointer !important;
+  outline: none !important;
+}
+
+.change-form fieldset.module details > summary::-webkit-details-marker,
+.change-form fieldset.module details > summary::marker,
+.change-form details > summary::-webkit-details-marker,
+.change-form details > summary::marker {
+  display: none !important;
+  content: "" !important;
+}
+
+/* Fieldset and Inline Headings */
 .change-form fieldset.module > h2,
 .change-form fieldset.module details summary h2,
 .change-form .inline-group > h2,
@@ -1112,7 +1137,7 @@ body.overflow-hidden {
   color: var(--erp-text) !important;
   font-size: 14.5px !important;
   font-weight: 700 !important;
-  padding: 13px 20px !important;
+  padding: 13px 48px 13px 20px !important;
   margin: 0 !important;
   border-radius: var(--erp-form-radius) var(--erp-form-radius) 0 0 !important;
   display: flex !important;
@@ -1126,23 +1151,42 @@ body.overflow-hidden {
   user-select: none !important;
 }
 
-/* Chevron caret icon on the right of the header */
+/* Eliminate duplicate pseudo-elements on h2 and inline-heading */
 .change-form fieldset.module > h2::after,
 .change-form fieldset.module details summary h2::after,
 .change-form .inline-group > h2::after,
 .change-form .inline-heading::after {
-  content: '⌄' !important; /* Default collapsed chevron pointing down */
-  font-size: 19px !important;
-  font-weight: 700 !important;
+  display: none !important;
+  content: none !important;
+}
+
+/* Single chevron caret icon on summary:after using Material Symbols font */
+.change-form fieldset.module details > summary:after,
+.change-form fieldset details > summary:after {
+  content: "expand_more" !important;
+  font-family: var(--font-family-material-symbols-outlined) !important;
+  font-size: 22px !important;
+  font-weight: 500 !important;
   color: #475569 !important;
-  margin-left: auto !important;
+  position: absolute !important;
+  top: 22px !important;
+  right: 18px !important;
+  transform: translateY(-50%) !important;
+  line-height: 1 !important;
   transition: transform 0.2s ease !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
 }
 
 /* When expanded, chevron points up */
-.change-form fieldset.module details[open] summary h2::after,
-.change-form .inline-group details[open] summary h2::after {
-  content: '⌃' !important;
+.change-form fieldset.module details[open] > summary:after,
+.change-form fieldset details[open] > summary:after {
+  transform: translateY(-50%) rotate(180deg) !important;
+}
+
+.dark .change-form fieldset.module details > summary:after,
+.dark .change-form fieldset details > summary:after {
+  color: #94a3b8 !important;
 }
 
 /* When collapsed (details not open), remove header border-bottom and round all corners */
@@ -1150,15 +1194,6 @@ body.overflow-hidden {
 .change-form .inline-group details:not([open]) summary h2 {
   border-bottom: none !important;
   border-radius: var(--erp-form-radius) !important;
-}
-
-/* Ensure details summary removes native arrow */
-.change-form fieldset.module details summary {
-  list-style: none !important;
-  cursor: pointer !important;
-}
-.change-form fieldset.module details summary::-webkit-details-marker {
-  display: none !important;
 }
 
 /* Section descriptions */
@@ -1173,17 +1208,6 @@ body.overflow-hidden {
 /* Internal fieldset padding */
 .change-form fieldset.module > div:not(.bg-base-50) {
   padding: 18px 20px !important;
-}
-
-/* Collapsible sections styling */
-.change-form fieldset.module details > summary {
-  cursor: pointer;
-  outline: none;
-  list-style: none;
-}
-
-.change-form fieldset.module details > summary::-webkit-details-marker {
-  display: none;
 }
 
 /* --------------------------------------------------------------------------
