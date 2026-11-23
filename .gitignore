@@ -14,3 +14,6 @@ staticfiles/
 artifacts/
 backups/
 *.dump
+
+# Temporary Office lock files
+~$*
